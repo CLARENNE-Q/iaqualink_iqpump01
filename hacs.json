@@ -1,5 +1,10 @@
 {
-    "name": "iAqualink iQPump01",
-    "domain": "iaqualink_iqpump01",
-    "render_readme": true,
+  "name": "iAqualink iQPump01",
+  "domain": "iaqualink_iqpump01",
+  "codeowners": ["@CLARENNE-Q"],
+  "documentation": "https://github.com/CLARENNE-Q/iaqualink_iqpump01",
+  "requirements": [],
+  "version": "1.0.1",
+  "config_flow": true,
+  "render_readme": true
 }

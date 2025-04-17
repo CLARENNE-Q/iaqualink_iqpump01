@@ -68,7 +68,15 @@ class IAqualinkClient:
                 "user_id": str(self.user_id),
                 "command": "/alldata/read"
             }
+
             resp = requests.post(control_url, headers=headers, json=payload)
+            if resp.status_code == 401:
+                _LOGGER.warning("[IAqualinkClient] Token expired during refresh, reauthenticating...")
+                self.login()
+                headers["cookie"] = f"session_id={self.session_id}; authentication_token={self.auth_token}"
+                headers["authorization"] = self.id_token
+                resp = requests.post(control_url, headers=headers, json=payload)
+
             self.data = resp.json().get("alldata", {})
             self.last_refresh = now
             return self.data
@@ -92,5 +100,13 @@ class IAqualinkClient:
         }
         _LOGGER.debug("[_send_command] POST %s | %s", command, param)
         resp = requests.post(control_url, headers=headers, json=payload)
+
+        if resp.status_code == 401:
+            _LOGGER.warning("[IAqualinkClient] Token expired during command, reauthenticating...")
+            self.login()
+            headers["cookie"] = f"session_id={self.session_id}; authentication_token={self.auth_token}"
+            headers["authorization"] = self.id_token
+            resp = requests.post(control_url, headers=headers, json=payload)
+
         _LOGGER.debug("[_send_command] Response: %s", resp.text)
         return resp
