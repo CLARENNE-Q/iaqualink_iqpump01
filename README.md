@@ -41,9 +41,7 @@ No further configuration is needed.
 | `number.pump_rpm_target` | Set the target RPM |
 | `sensor.pump_power` | Power consumption (W) |
 | `sensor.pump_speed` | Current speed (RPM) |
-| `sensor.pump_temperature` | Motor temperature |
-| `sensor.pump_runstate` | Run state (on/off) |
-| ... | Additional attributes such as firmware, serial, Wi-Fi, and more |
+| ... | Additional attributes such as temperature, runstate, firmware, priming, max/min-speed, serial, Wi-Fi, and more |
 
 ## 🙏 Thanks
 
