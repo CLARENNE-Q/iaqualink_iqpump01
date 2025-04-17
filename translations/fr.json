@@ -1,0 +1,21 @@
+
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connexion iAquaLink",
+        "description": "Entrez votre adresse email et mot de passe iAquaLink.",
+        "data": {
+          "email": "Adresse email",
+          "password": "Mot de passe"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de se connecter. Vérifiez vos identifiants."
+    },
+    "abort": {
+      "already_configured": "Cet appareil est déjà configuré."
+    }
+  }
+}

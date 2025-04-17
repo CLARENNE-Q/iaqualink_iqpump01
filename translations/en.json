@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "iAquaLink Login",
+        "description": "Enter your iAquaLink email and password.",
+        "data": {
+          "email": "Email Address",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect. Please check your credentials."
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  }
+}
