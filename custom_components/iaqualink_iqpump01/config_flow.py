@@ -15,7 +15,6 @@ class AqualinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             client = IAqualinkClient(user_input["email"], user_input["password"])
             try:
                 await self.hass.async_add_executor_job(client.login)
-                await self.hass.async_add_executor_job(client.get_serial_number)
                 return self.async_create_entry(title="iAquaLink Pump", data=user_input)
             except Exception as e:
                 _LOGGER.debug("Login error: %s", e)
