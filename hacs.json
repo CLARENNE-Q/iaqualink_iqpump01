@@ -4,7 +4,7 @@
   "codeowners": ["@CLARENNE-Q"],
   "documentation": "https://github.com/CLARENNE-Q/iaqualink_iqpump01",
   "requirements": [],
-  "version": "1.0.1",
+  "version": "1.0.3",
   "config_flow": true,
   "render_readme": true
 }

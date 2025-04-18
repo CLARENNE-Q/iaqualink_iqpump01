@@ -20,7 +20,7 @@ class IAqualinkClient:
         self._refresh_lock = threading.Lock()
 
     def login(self):
-        _LOGGER.debug("Logging in with email: %s", self.email)
+        _LOGGER.debug("[login] Logging in with email: %s", self.email)
         login_url = "https://prod.zodiac-io.com/users/v1/login"
         payload = {
             "email": self.email,
@@ -29,6 +29,9 @@ class IAqualinkClient:
         }
         headers = {"Content-Type": "application/json"}
         response = requests.post(login_url, json=payload, headers=headers)
+
+        _LOGGER.debug("[login] Response: %s", response.text)
+
         if response.status_code != 200:
             raise Exception("Login failed")
 
@@ -39,20 +42,26 @@ class IAqualinkClient:
         self.id_token = data["userPoolOAuth"]["IdToken"]
 
         device_url = f"https://r-api.iaqualink.net/devices.json?authentication_token={self.auth_token}&user_id={self.user_id}&api_key={self.apikey}"
-        device_list = requests.get(device_url).json()
-        for d in device_list:
+        device_list = requests.get(device_url)
+
+        _LOGGER.debug("[device_url] Response: %s", device_list.text)
+
+        for d in device_list.json():
             if d.get("device_type") == "i2d":
                 self.serial = d.get("serial_number")
                 break
+
+        if not self.serial:
+            _LOGGER.error("[login] No iQPump01 controller (device_type=i2d) found in your account. Make sure the pump is linked to your iAquaLink account.")
 
     def refresh_data(self):
         with self._refresh_lock:
             now = time.time()
             if self.last_refresh and now - self.last_refresh < 60:
-                _LOGGER.debug("[IAqualinkClient] Using cached pump data.")
+                _LOGGER.debug("[refresh_data] Using cached pump data.")
                 return self.data
 
-            _LOGGER.debug("[IAqualinkClient] Refreshing pump data...")
+            _LOGGER.debug("[refresh_data] Refreshing pump data...")
             control_url = f"https://r-api.iaqualink.net/v2/devices/{self.serial}/control.json?"
             headers = {
                 "accept": "*/*",
@@ -68,14 +77,8 @@ class IAqualinkClient:
                 "user_id": str(self.user_id),
                 "command": "/alldata/read"
             }
-
             resp = requests.post(control_url, headers=headers, json=payload)
-            if resp.status_code == 401:
-                _LOGGER.warning("[IAqualinkClient] Token expired during refresh, reauthenticating...")
-                self.login()
-                headers["cookie"] = f"session_id={self.session_id}; authentication_token={self.auth_token}"
-                headers["authorization"] = self.id_token
-                resp = requests.post(control_url, headers=headers, json=payload)
+            _LOGGER.debug("[refresh_data] Response: %s", resp.text)
 
             self.data = resp.json().get("alldata", {})
             self.last_refresh = now
@@ -100,13 +103,5 @@ class IAqualinkClient:
         }
         _LOGGER.debug("[_send_command] POST %s | %s", command, param)
         resp = requests.post(control_url, headers=headers, json=payload)
-
-        if resp.status_code == 401:
-            _LOGGER.warning("[IAqualinkClient] Token expired during command, reauthenticating...")
-            self.login()
-            headers["cookie"] = f"session_id={self.session_id}; authentication_token={self.auth_token}"
-            headers["authorization"] = self.id_token
-            resp = requests.post(control_url, headers=headers, json=payload)
-
         _LOGGER.debug("[_send_command] Response: %s", resp.text)
         return resp
