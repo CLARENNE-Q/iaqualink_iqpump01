@@ -11,7 +11,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 class PumpSpeedPercentNumber(NumberEntity):
     def __init__(self, client):
         self._client = client
-        self._attr_name = "Pump RPM Target percentage"
+        self._attr_name = "Pump RPM Target Percentage"
         self._attr_unique_id = f"{client.serial}_rpm_percentage"
         self._attr_step = 1
         self._attr_native_min_value = 0
