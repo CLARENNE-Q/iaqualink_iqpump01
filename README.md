@@ -9,9 +9,9 @@ Control your Jandy iQPump01 variable-speed pool pump directly from Home Assistan
 ## ✅ Features
 
 - Turn the pump on/off
-- Set custom target RPM
+- Set custom target using percentage-based control
 - Monitor current speed, power consumption, motor temperature, Wi-Fi status, etc.
-- View advanced attributes like firmware version, priming status, and serial number
+- View advanced attributes like firmware version, priming status, min/max RPM, serial number
 - Auto-refresh pump data every 60 seconds (with cache)
 - HACS compatible for easy installation
 
@@ -36,10 +36,10 @@ No further configuration is needed.
 | Entity | Description |
 |--------|-------------|
 | `switch.pump_i2d` | Turn the pump on or off |
-| `number.pump_rpm_target` | Set the target RPM |
+| `number.pump_rpm_target_percentage` | Target RPM (%) — mapped to actual RPM using min/max range |
 | `sensor.pump_power` | Power consumption (W) |
 | `sensor.pump_speed` | Current speed (RPM) |
-| ... | Additional attributes such as temperature, runstate, firmware, priming, max/min-speed, serial, Wi-Fi, and more |
+| ... | Additional attributes on switch.pump_i2d such as temperature, runstate, firmware, priming, max/min-speed, serial, Wi-Fi, and more |
 
 
 ## 📌 Current limitations
