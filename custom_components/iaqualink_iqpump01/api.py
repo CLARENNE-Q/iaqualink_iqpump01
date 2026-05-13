@@ -60,7 +60,7 @@ class IAqualinkCommandError(IAqualinkError):
 
 
 class IAqualinkClient:
-    def __init__(self, email, password):
+    def __init__(self, email, password, serial=None):
         self.email = email
         self.password = password
         self.apikey = "EOOEMOW4YR6QNB07"
@@ -68,7 +68,9 @@ class IAqualinkClient:
         self.session_id = None
         self.user_id = None
         self.id_token = None
-        self.serial = None
+        self.serial = str(serial) if serial is not None else None
+        self.devices = []
+        self.device = None
         self.data = {}
         self._refresh_lock = threading.Lock()
 
@@ -227,15 +229,43 @@ class IAqualinkClient:
 
         self._log_response("device_url", device_list)
 
-        for d in device_list.json():
-            if d.get("device_type") == "i2d":
-                self.serial = d.get("serial_number")
-                break
+        devices_payload = device_list.json()
+        if isinstance(devices_payload, dict):
+            devices_payload = devices_payload.get("devices", [])
 
-        if not self.serial:
+        self.devices = [
+            device
+            for device in devices_payload
+            if (
+                isinstance(device, dict)
+                and device.get("device_type") == "i2d"
+                and device.get("serial_number")
+            )
+        ]
+
+        if not self.devices:
             raise IAqualinkNoDeviceError(
                 "No iQPump01 controller (device_type=i2d) found in this iAquaLink account"
             )
+
+        if self.serial:
+            self.device = next(
+                (
+                    device
+                    for device in self.devices
+                    if device.get("serial_number") == self.serial
+                ),
+                None,
+            )
+            if self.device is None:
+                raise IAqualinkNoDeviceError(
+                    f"Configured iQPump01 controller {self._mask_suffix(self.serial)} "
+                    "was not found in this iAquaLink account"
+                )
+            return
+
+        self.device = self.devices[0]
+        self.serial = self.device.get("serial_number")
 
     def refresh_data(self):
         with self._refresh_lock:

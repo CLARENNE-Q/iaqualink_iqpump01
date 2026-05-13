@@ -8,6 +8,13 @@
           "email": "Email Address",
           "password": "Password"
         }
+      },
+      "select_pump": {
+        "title": "Select iQPump01",
+        "description": "Multiple iQPump01 controllers were found. Select the pump to add.",
+        "data": {
+          "serial": "Pump"
+        }
       }
     },
     "error": {

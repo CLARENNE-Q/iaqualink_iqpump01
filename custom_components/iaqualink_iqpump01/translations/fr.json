@@ -8,6 +8,13 @@
           "email": "Adresse email",
           "password": "Mot de passe"
         }
+      },
+      "select_pump": {
+        "title": "Selection iQPump01",
+        "description": "Plusieurs controleurs iQPump01 ont ete trouves. Selectionnez la pompe a ajouter.",
+        "data": {
+          "serial": "Pompe"
+        }
       }
     },
     "error": {

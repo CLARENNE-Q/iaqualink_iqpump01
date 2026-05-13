@@ -1,5 +1,5 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/CLARENNE-Q/iaqualink_iqpump01)
-![version](https://img.shields.io/badge/version-1.0.13-blue)
+![version](https://img.shields.io/badge/version-1.0.14-blue)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-%23FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/clarenneq)
 
 # iAquaLink iQPump01
@@ -11,6 +11,7 @@ Control your Jandy iQPump01 variable-speed pool pump directly from Home Assistan
 - Turn the pump on/off
 - Set custom target using percentage-based control with configurable manual duration
 - Return from custom/manual mode to the scheduled program with a dedicated button
+- Select the target iQPump01 controller when multiple pumps are linked to iAquaLink
 - Monitor current speed, power consumption, motor temperature, Wi-Fi status, etc.
 - Expose operating mode, target RPM, custom RPM, and custom speed timer sensors
 - Robust setup with duplicate detection, auth retry handling, and clear no-device errors

@@ -1,5 +1,6 @@
 DOMAIN = "iaqualink_iqpump01"
 
+CONF_SERIAL = "serial"
 CONF_CUSTOM_SPEED_TIMER_SECONDS = "custom_speed_timer_seconds"
 CONF_UPDATE_INTERVAL_SECONDS = "update_interval_seconds"
 CONF_FAST_UPDATE_INTERVAL_SECONDS = "fast_update_interval_seconds"

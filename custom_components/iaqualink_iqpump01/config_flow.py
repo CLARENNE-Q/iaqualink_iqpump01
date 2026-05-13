@@ -1,8 +1,10 @@
 import logging
 from homeassistant import config_entries
+from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers import selector
 import voluptuous as vol
 from .const import (
+    CONF_SERIAL,
     CONF_CUSTOM_SPEED_TIMER_SECONDS,
     CONF_FAST_REFRESH_DURATION_SECONDS,
     CONF_FAST_UPDATE_INTERVAL_SECONDS,
@@ -104,9 +106,68 @@ def _options_schema(options):
 class AqualinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
+    def __init__(self):
+        self._pending_data = None
+        self._devices = []
+
     @staticmethod
     def async_get_options_flow(config_entry):
         return AqualinkOptionsFlow(config_entry)
+
+    @staticmethod
+    def _device_serial(device):
+        serial = device.get("serial_number")
+        return str(serial) if serial is not None else None
+
+    @classmethod
+    def _device_label(cls, device):
+        serial = cls._device_serial(device)
+        name = (
+            device.get("name")
+            or device.get("device_name")
+            or device.get("deviceName")
+            or device.get("label")
+            or device.get("location_name")
+            or device.get("locationName")
+        )
+        if name and serial:
+            return f"{name} ({serial})"
+        return serial or "iQPump01"
+
+    def _select_pump_schema(self):
+        return vol.Schema({
+            vol.Required(CONF_SERIAL): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        selector.SelectOptionDict(
+                            value=self._device_serial(device),
+                            label=self._device_label(device),
+                        )
+                        for device in self._devices
+                    ],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            )
+        })
+
+    async def _async_create_pump_entry(self, data, serial):
+        data = dict(data)
+        data[CONF_SERIAL] = serial
+        await self.async_set_unique_id(serial)
+        self._abort_if_unique_id_configured()
+        device = next(
+            (
+                candidate
+                for candidate in self._devices
+                if self._device_serial(candidate) == serial
+            ),
+            None,
+        )
+        label = self._device_label(device) if device else serial
+        return self.async_create_entry(
+            title=f"iAquaLink iQPump01 {label}",
+            data=data,
+        )
 
     async def async_step_user(self, user_input=None):
         errors = {}
@@ -116,9 +177,15 @@ class AqualinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             client = IAqualinkClient(data["email"], data["password"])
             try:
                 await self.hass.async_add_executor_job(client.login)
-                await self.async_set_unique_id(client.serial)
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(title="iAquaLink iQPump01", data=data)
+                self._devices = client.devices
+                if len(self._devices) == 1:
+                    return await self._async_create_pump_entry(
+                        data,
+                        self._device_serial(self._devices[0]),
+                    )
+
+                self._pending_data = data
+                return await self.async_step_select_pump()
             except IAqualinkAuthError as e:
                 _LOGGER.debug("Authentication error: %s", e)
                 errors["base"] = "invalid_auth"
@@ -128,6 +195,8 @@ class AqualinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except IAqualinkConnectionError as e:
                 _LOGGER.debug("Connection error: %s", e)
                 errors["base"] = "cannot_connect"
+            except AbortFlow:
+                raise
             except Exception as e:
                 _LOGGER.debug("Unexpected setup error: %s", e)
                 errors["base"] = "cannot_connect"
@@ -139,6 +208,21 @@ class AqualinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required("password"): str
             }),
             errors=errors
+        )
+
+    async def async_step_select_pump(self, user_input=None):
+        if self._pending_data is None:
+            return await self.async_step_user()
+
+        if user_input is not None:
+            return await self._async_create_pump_entry(
+                self._pending_data,
+                user_input[CONF_SERIAL],
+            )
+
+        return self.async_show_form(
+            step_id="select_pump",
+            data_schema=self._select_pump_schema(),
         )
 
 

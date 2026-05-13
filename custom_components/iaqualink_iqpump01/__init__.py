@@ -2,7 +2,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from .const import DOMAIN
+from .const import CONF_SERIAL, DOMAIN
 from .api import (
     IAqualinkAuthError,
     IAqualinkClient,
@@ -21,7 +21,11 @@ async def async_options_update_listener(hass: HomeAssistant, entry: ConfigEntry)
     await hass.config_entries.async_reload(entry.entry_id)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
-    client = IAqualinkClient(entry.data["email"], entry.data["password"])
+    client = IAqualinkClient(
+        entry.data["email"],
+        entry.data["password"],
+        entry.data.get(CONF_SERIAL),
+    )
     try:
         await hass.async_add_executor_job(client.login)
     except IAqualinkAuthError as err:
@@ -31,8 +35,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     except IAqualinkConnectionError as err:
         raise ConfigEntryNotReady("Unable to connect to iAquaLink") from err
 
+    update_kwargs = {}
     if entry.unique_id is None:
-        hass.config_entries.async_update_entry(entry, unique_id=client.serial)
+        update_kwargs["unique_id"] = client.serial
+    if entry.data.get(CONF_SERIAL) != client.serial:
+        data = dict(entry.data)
+        data[CONF_SERIAL] = client.serial
+        update_kwargs["data"] = data
+    if update_kwargs:
+        hass.config_entries.async_update_entry(entry, **update_kwargs)
 
     coordinator = IAqualinkPumpCoordinator(hass, client, entry)
     await coordinator.async_config_entry_first_refresh()
