@@ -20,6 +20,44 @@ class IAqualinkClient:
         self.last_refresh = 0
         self._refresh_lock = threading.Lock()
 
+    @staticmethod
+    def _safe_url(url):
+        return url.split("?", 1)[0]
+
+    def _request(self, method, url, *, check_status=True, **kwargs):
+        try:
+            response = requests.request(
+                method, url, timeout=REQUEST_TIMEOUT, **kwargs
+            )
+            if check_status:
+                response.raise_for_status()
+            return response
+        except requests.Timeout:
+            _LOGGER.warning(
+                "[_request] iAquaLink %s request timed out after %ss: %s",
+                method.upper(),
+                REQUEST_TIMEOUT,
+                self._safe_url(url),
+            )
+            raise
+        except requests.HTTPError as err:
+            status = err.response.status_code if err.response is not None else "unknown"
+            _LOGGER.warning(
+                "[_request] iAquaLink %s request returned HTTP %s: %s",
+                method.upper(),
+                status,
+                self._safe_url(url),
+            )
+            raise
+        except requests.RequestException as err:
+            _LOGGER.warning(
+                "[_request] iAquaLink %s request failed for %s: %s",
+                method.upper(),
+                self._safe_url(url),
+                err.__class__.__name__,
+            )
+            raise
+
     def login(self):
         _LOGGER.debug("[login] Logging in with email: %s", self.email)
         login_url = "https://prod.zodiac-io.com/users/v1/login"
@@ -29,14 +67,11 @@ class IAqualinkClient:
             "apikey": self.apikey
         }
         headers = {"Content-Type": "application/json"}
-        response = requests.post(
-            login_url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT
+        response = self._request(
+            "post", login_url, json=payload, headers=headers
         )
 
         _LOGGER.debug("[login] Response: %s", response.text)
-
-        if response.status_code != 200:
-            raise Exception("Login failed")
 
         data = response.json()
         self.auth_token = data["authentication_token"]
@@ -45,7 +80,7 @@ class IAqualinkClient:
         self.id_token = data["userPoolOAuth"]["IdToken"]
 
         device_url = f"https://r-api.iaqualink.net/devices.json?authentication_token={self.auth_token}&user_id={self.user_id}&api_key={self.apikey}"
-        device_list = requests.get(device_url, timeout=REQUEST_TIMEOUT)
+        device_list = self._request("get", device_url)
 
         _LOGGER.debug("[device_url] Response: %s", device_list.text)
 
@@ -81,16 +116,20 @@ class IAqualinkClient:
                 "command": "/alldata/read"
             }
 
-            resp = requests.post(
-                control_url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
+            resp = self._request(
+                "post", control_url, check_status=False, headers=headers, json=payload
             )
             if resp.status_code == 401:
                 _LOGGER.warning("[refresh_data] Token expired during refresh, reauthenticating...")
                 self.login()
                 headers["cookie"] = f"session_id={self.session_id}; authentication_token={self.auth_token}"
                 headers["authorization"] = self.id_token
-                resp = requests.post(
-                    control_url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
+                resp = self._request(
+                    "post",
+                    control_url,
+                    check_status=False,
+                    headers=headers,
+                    json=payload,
                 )
 
             _LOGGER.debug("[refresh_data] Response: %s", resp.text)
@@ -118,16 +157,20 @@ class IAqualinkClient:
             "params": param,
         }
         _LOGGER.debug("[_send_command] POST %s | %s", command, param)
-        resp = requests.post(
-            control_url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
+        resp = self._request(
+            "post", control_url, check_status=False, headers=headers, json=payload
         )
         if resp.status_code == 401:
             _LOGGER.warning("[_send_command] Token expired during command, reauthenticating...")
             self.login()
             headers["cookie"] = f"session_id={self.session_id}; authentication_token={self.auth_token}"
             headers["authorization"] = self.id_token
-            resp = requests.post(
-                control_url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
+            resp = self._request(
+                "post",
+                control_url,
+                check_status=False,
+                headers=headers,
+                json=payload,
             )
 
         _LOGGER.debug("[_send_command] Response status: %s", resp.status_code)
