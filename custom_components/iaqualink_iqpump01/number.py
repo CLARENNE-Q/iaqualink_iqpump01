@@ -3,6 +3,7 @@ from homeassistant.components.number import NumberEntity
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+CUSTOM_SPEED_TIMER_SECONDS = 6 * 60 * 60
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     client = hass.data[DOMAIN][config_entry.entry_id]
@@ -48,7 +49,9 @@ class PumpSpeedPercentNumber(NumberEntity):
             self._client._send_command, "/customspeedrpm/write", f"value={rpm}"
         )
         await self.hass.async_add_executor_job(
-            self._client._send_command, "/customspeedtimer/write", "value=1800"
+            self._client._send_command,
+            "/customspeedtimer/write",
+            f"value={CUSTOM_SPEED_TIMER_SECONDS}",
         )
 
         self._client.last_refresh = 0
