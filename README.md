@@ -54,11 +54,13 @@ No further configuration is needed.
 
 ## 📌 Current limitations
 
-- Only supports a single pump (first device of type `i2d`)
-- No multi-pump support yet (planned for future release)
-- Requires a valid iAquaLink account with a registered iQPump01 pump
-- Only compatible with iQPump01: This integration is designed specifically for the Jandy iQPump01 controller. 
-- Refresh rate is limited to 60 seconds: To avoid overloading the vendor's API and triggering rate limits, the integration uses a caching mechanism with a refresh interval of 60 seconds. All data sensors and status updates rely on this rate.
+- Only `i2d` controllers (iQPump01) are supported; other iAquaLink equipment families are not supported yet.
+- Requires a valid iAquaLink account with at least one registered iQPump01 controller.
+- Multi-pump is supported through multiple integration entries (one per serial), but there is no global cross-pump orchestration view/feature yet.
+- Polling is configurable:
+  - **Normal**: 60s by default (adjustable from 15 to 300s in options),
+  - **Fast refresh** after speed changes: 10s by default for 3 minutes (adjustable from 5 to 60s and 30 to 600s).
+  These guardrails help reduce cloud API rate-limiting risk.
 
 ## 🐞 Debugging
 
