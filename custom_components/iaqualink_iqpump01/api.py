@@ -6,6 +6,8 @@ import requests
 _LOGGER = logging.getLogger(__name__)
 REQUEST_TIMEOUT = 15
 REDACTED = "<redacted>"
+CONTROL_USER_AGENT = "iAqualink/934 CFNetwork/3826.500.111.2.2 Darwin/24.4.0"
+CONTROL_ACCEPT_LANGUAGE = "fr-CA,fr;q=0.9"
 SENSITIVE_LOG_KEYS = {
     "accesskeyid",
     "address",
@@ -198,6 +200,49 @@ class IAqualinkClient:
                 f"iAquaLink {method.upper()} request failed"
             ) from err
 
+
+    def _parse_json(self, response, context):
+        try:
+            return response.json()
+        except ValueError as err:
+            raise IAqualinkConnectionError(
+                f"iAquaLink returned invalid JSON during {context}"
+            ) from err
+
+    def _control_url(self):
+        return f"https://r-api.iaqualink.net/v2/devices/{self.serial}/control.json?"
+
+    def _control_headers(self):
+        return {
+            "accept": "*/*",
+            "content-type": "application/json",
+            "cookie": f"session_id={self.session_id}; authentication_token={self.auth_token}",
+            "authorization": self.id_token,
+            "api_key": self.apikey,
+            "user-agent": CONTROL_USER_AGENT,
+            "accept-language": CONTROL_ACCEPT_LANGUAGE,
+            "accept-encoding": "gzip, deflate, br",
+        }
+
+    def _post_control(self, payload, context):
+        control_url = self._control_url()
+        headers = self._control_headers()
+        response = self._request(
+            "post", control_url, check_status=False, headers=headers, json=payload
+        )
+        if response.status_code == 401:
+            _LOGGER.warning("[%s] Token expired, reauthenticating...", context)
+            self.login()
+            headers = self._control_headers()
+            response = self._request(
+                "post",
+                control_url,
+                check_status=False,
+                headers=headers,
+                json=payload,
+            )
+        return response
+
     def login(self):
         _LOGGER.debug(
             "[login] Logging in with email: %s", self._mask_email(self.email)
@@ -215,7 +260,7 @@ class IAqualinkClient:
 
         self._log_response("login", response)
 
-        data = response.json()
+        data = self._parse_json(response, "login")
         try:
             self.auth_token = data["authentication_token"]
             self.session_id = data["session_id"]
@@ -229,7 +274,7 @@ class IAqualinkClient:
 
         self._log_response("device_url", device_list)
 
-        devices_payload = device_list.json()
+        devices_payload = self._parse_json(device_list, "devices list")
         if isinstance(devices_payload, dict):
             devices_payload = devices_payload.get("devices", [])
 
@@ -270,83 +315,34 @@ class IAqualinkClient:
     def refresh_data(self):
         with self._refresh_lock:
             _LOGGER.debug("[refresh_data] Refreshing pump data.")
-            control_url = f"https://r-api.iaqualink.net/v2/devices/{self.serial}/control.json?"
-            headers = {
-                "accept": "*/*",
-                "content-type": "application/json",
-                "cookie": f"session_id={self.session_id}; authentication_token={self.auth_token}",
-                "authorization": self.id_token,
-                "api_key": self.apikey,
-                "user-agent": "iAqualink/934 CFNetwork/3826.500.111.2.2 Darwin/24.4.0",
-                "accept-language": "fr-CA,fr;q=0.9",
-                "accept-encoding": "gzip, deflate, br"
-            }
             payload = {
                 "user_id": str(self.user_id),
                 "command": "/alldata/read"
             }
 
-            resp = self._request(
-                "post", control_url, check_status=False, headers=headers, json=payload
-            )
-            if resp.status_code == 401:
-                _LOGGER.warning("[refresh_data] Token expired during refresh, reauthenticating...")
-                self.login()
-                headers["cookie"] = f"session_id={self.session_id}; authentication_token={self.auth_token}"
-                headers["authorization"] = self.id_token
-                resp = self._request(
-                    "post",
-                    control_url,
-                    check_status=False,
-                    headers=headers,
-                    json=payload,
-                )
+            resp = self._post_control(payload, "refresh_data")
 
             self._log_response("refresh_data", resp)
             self._raise_for_status(resp, "refresh_data")
 
-            self.data = resp.json().get("alldata", {})
+            response_data = self._parse_json(resp, "refresh_data")
+            self.data = response_data.get("alldata", {})
             return self.data
 
     def _send_command(self, command, param):
-        control_url = f"https://r-api.iaqualink.net/v2/devices/{self.serial}/control.json?"
-        headers = {
-            "accept": "*/*",
-            "content-type": "application/json",
-            "cookie": f"session_id={self.session_id}; authentication_token={self.auth_token}",
-            "authorization": self.id_token,
-            "api_key": self.apikey,
-            "user-agent": "iAqualink/934 CFNetwork/3826.500.111.2.2 Darwin/24.4.0",
-            "accept-language": "fr-CA,fr;q=0.9",
-            "accept-encoding": "gzip, deflate, br"
-        }
         payload = {
             "user_id": str(self.user_id),
             "command": command,
             "params": param,
         }
         _LOGGER.debug("[_send_command] POST %s | %s", command, param)
-        resp = self._request(
-            "post", control_url, check_status=False, headers=headers, json=payload
-        )
-        if resp.status_code == 401:
-            _LOGGER.warning("[_send_command] Token expired during command, reauthenticating...")
-            self.login()
-            headers["cookie"] = f"session_id={self.session_id}; authentication_token={self.auth_token}"
-            headers["authorization"] = self.id_token
-            resp = self._request(
-                "post",
-                control_url,
-                check_status=False,
-                headers=headers,
-                json=payload,
-            )
+        resp = self._post_control(payload, "_send_command")
 
         _LOGGER.debug("[_send_command] Response status: %s", resp.status_code)
         self._log_response("_send_command", resp)
         self._raise_for_status(resp, command)
 
-        data = resp.json()
+        data = self._parse_json(resp, "_send_command")
         command_key = command.strip("/").split("/")[0]
         expected_value = param.removeprefix("value=") if param.startswith("value=") else None
         returned_value = data.get(command_key, {}).get("value")
