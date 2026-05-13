@@ -17,6 +17,9 @@ PLATFORMS = ["switch", "number", "sensor"]
 async def async_setup(hass: HomeAssistant, config: dict):
     return True
 
+async def async_options_update_listener(hass: HomeAssistant, entry: ConfigEntry):
+    await hass.config_entries.async_reload(entry.entry_id)
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     client = IAqualinkClient(entry.data["email"], entry.data["password"])
     try:
@@ -31,9 +34,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     if entry.unique_id is None:
         hass.config_entries.async_update_entry(entry, unique_id=client.serial)
 
-    coordinator = IAqualinkPumpCoordinator(hass, client)
+    coordinator = IAqualinkPumpCoordinator(hass, client, entry)
     await coordinator.async_config_entry_first_refresh()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    entry.async_on_unload(entry.add_update_listener(async_options_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

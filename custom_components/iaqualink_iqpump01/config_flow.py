@@ -1,7 +1,20 @@
 import logging
 from homeassistant import config_entries
+from homeassistant.helpers import selector
 import voluptuous as vol
-from .const import DOMAIN
+from .const import (
+    CONF_CUSTOM_SPEED_TIMER_SECONDS,
+    CONF_FAST_REFRESH_DURATION_SECONDS,
+    CONF_FAST_UPDATE_INTERVAL_SECONDS,
+    CONF_UPDATE_INTERVAL_SECONDS,
+    CUSTOM_SPEED_TIMER_OPTIONS,
+    DEFAULT_CUSTOM_SPEED_TIMER_SECONDS,
+    DEFAULT_FAST_REFRESH_DURATION_SECONDS,
+    DEFAULT_FAST_UPDATE_INTERVAL_SECONDS,
+    DEFAULT_UPDATE_INTERVAL_SECONDS,
+    DOMAIN,
+    option_int,
+)
 from .api import (
     IAqualinkAuthError,
     IAqualinkClient,
@@ -11,8 +24,89 @@ from .api import (
 
 _LOGGER = logging.getLogger(__name__)
 
+OPTION_INT_KEYS = (
+    CONF_CUSTOM_SPEED_TIMER_SECONDS,
+    CONF_UPDATE_INTERVAL_SECONDS,
+    CONF_FAST_UPDATE_INTERVAL_SECONDS,
+    CONF_FAST_REFRESH_DURATION_SECONDS,
+)
+
+
+def _options_schema(options):
+    return vol.Schema({
+        vol.Required(
+            CONF_CUSTOM_SPEED_TIMER_SECONDS,
+            default=str(option_int(
+                options,
+                CONF_CUSTOM_SPEED_TIMER_SECONDS,
+                DEFAULT_CUSTOM_SPEED_TIMER_SECONDS,
+            )),
+        ): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[
+                    selector.SelectOptionDict(value=str(value), label=label)
+                    for value, label in CUSTOM_SPEED_TIMER_OPTIONS.items()
+                ],
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        ),
+        vol.Required(
+            CONF_UPDATE_INTERVAL_SECONDS,
+            default=option_int(
+                options,
+                CONF_UPDATE_INTERVAL_SECONDS,
+                DEFAULT_UPDATE_INTERVAL_SECONDS,
+            ),
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=15,
+                max=300,
+                step=5,
+                unit_of_measurement="s",
+                mode=selector.NumberSelectorMode.BOX,
+            )
+        ),
+        vol.Required(
+            CONF_FAST_UPDATE_INTERVAL_SECONDS,
+            default=option_int(
+                options,
+                CONF_FAST_UPDATE_INTERVAL_SECONDS,
+                DEFAULT_FAST_UPDATE_INTERVAL_SECONDS,
+            ),
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=5,
+                max=60,
+                step=5,
+                unit_of_measurement="s",
+                mode=selector.NumberSelectorMode.BOX,
+            )
+        ),
+        vol.Required(
+            CONF_FAST_REFRESH_DURATION_SECONDS,
+            default=option_int(
+                options,
+                CONF_FAST_REFRESH_DURATION_SECONDS,
+                DEFAULT_FAST_REFRESH_DURATION_SECONDS,
+            ),
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=30,
+                max=600,
+                step=30,
+                unit_of_measurement="s",
+                mode=selector.NumberSelectorMode.BOX,
+            )
+        ),
+    })
+
+
 class AqualinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
+
+    @staticmethod
+    def async_get_options_flow(config_entry):
+        return AqualinkOptionsFlow(config_entry)
 
     async def async_step_user(self, user_input=None):
         errors = {}
@@ -45,4 +139,21 @@ class AqualinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required("password"): str
             }),
             errors=errors
+        )
+
+
+class AqualinkOptionsFlow(config_entries.OptionsFlow):
+    def __init__(self, config_entry):
+        self._config_entry = config_entry
+
+    async def async_step_init(self, user_input=None):
+        if user_input is not None:
+            options = dict(user_input)
+            for key in OPTION_INT_KEYS:
+                options[key] = int(options[key])
+            return self.async_create_entry(title="", data=options)
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=_options_schema(self._config_entry.options),
         )

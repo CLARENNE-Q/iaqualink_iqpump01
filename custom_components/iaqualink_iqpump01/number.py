@@ -2,11 +2,15 @@ import logging
 from homeassistant.components.number import NumberEntity
 from homeassistant.exceptions import HomeAssistantError
 from .api import IAqualinkError
-from .const import DOMAIN
+from .const import (
+    CONF_CUSTOM_SPEED_TIMER_SECONDS,
+    DEFAULT_CUSTOM_SPEED_TIMER_SECONDS,
+    DOMAIN,
+    option_int,
+)
 from .entity import IAqualinkPumpEntity
 
 _LOGGER = logging.getLogger(__name__)
-CUSTOM_SPEED_TIMER_SECONDS = 6 * 60 * 60
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     coordinator = hass.data[DOMAIN][config_entry.entry_id]
@@ -54,11 +58,24 @@ class PumpSpeedPercentNumber(IAqualinkPumpEntity, NumberEntity):
             _LOGGER.warning("[PumpSpeedPercentNumber] Failed to read state: %s", e)
             return None
 
+    def _custom_speed_timer_seconds(self):
+        return option_int(
+            self.coordinator.config_entry.options,
+            CONF_CUSTOM_SPEED_TIMER_SECONDS,
+            DEFAULT_CUSTOM_SPEED_TIMER_SECONDS,
+        )
+
     async def async_set_value(self, value):
         rpm = self._percent_to_rpm(value)
         rpm = int(round(rpm / 25) * 25)
+        timer_seconds = self._custom_speed_timer_seconds()
 
-        _LOGGER.debug("[PumpSpeedPercentNumber] async_set_value %s%% -> %s RPM", value, rpm)
+        _LOGGER.debug(
+            "[PumpSpeedPercentNumber] async_set_value %s%% -> %s RPM for %ss",
+            value,
+            rpm,
+            timer_seconds,
+        )
 
         try:
             # The controller ignores custom RPM writes while running in scheduled mode
@@ -72,7 +89,7 @@ class PumpSpeedPercentNumber(IAqualinkPumpEntity, NumberEntity):
             await self.hass.async_add_executor_job(
                 self.client._send_command,
                 "/customspeedtimer/write",
-                f"value={CUSTOM_SPEED_TIMER_SECONDS}",
+                f"value={timer_seconds}",
             )
         except IAqualinkError as err:
             raise HomeAssistantError(f"Unable to set pump speed: {err}") from err

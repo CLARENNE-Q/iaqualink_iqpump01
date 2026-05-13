@@ -18,5 +18,19 @@
     "abort": {
       "already_configured": "This device is already configured."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "iAquaLink iQPump01 Options",
+        "description": "Tune manual speed duration and polling behavior.",
+        "data": {
+          "custom_speed_timer_seconds": "Manual speed duration",
+          "update_interval_seconds": "Normal polling interval",
+          "fast_update_interval_seconds": "Fast polling interval after RPM change",
+          "fast_refresh_duration_seconds": "Fast polling duration after RPM change"
+        }
+      }
+    }
   }
 }

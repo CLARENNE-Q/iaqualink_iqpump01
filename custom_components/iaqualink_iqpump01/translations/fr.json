@@ -18,5 +18,19 @@
     "abort": {
       "already_configured": "Cet appareil est deja configure."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options iAquaLink iQPump01",
+        "description": "Ajustez la duree de vitesse manuelle et le polling.",
+        "data": {
+          "custom_speed_timer_seconds": "Duree de vitesse manuelle",
+          "update_interval_seconds": "Intervalle de polling normal",
+          "fast_update_interval_seconds": "Intervalle de polling rapide apres changement RPM",
+          "fast_refresh_duration_seconds": "Duree du polling rapide apres changement RPM"
+        }
+      }
+    }
   }
 }
