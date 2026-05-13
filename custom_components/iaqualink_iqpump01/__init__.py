@@ -12,7 +12,7 @@ from .api import (
 from .coordinator import IAqualinkPumpCoordinator
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS = ["switch", "number", "sensor", "button"]
+PLATFORMS = ["switch", "number", "sensor", "button", "binary_sensor"]
 
 async def async_setup(hass: HomeAssistant, config: dict):
     return True
