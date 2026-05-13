@@ -2,9 +2,9 @@
   "name": "iAqualink iQPump01",
   "domain": "iaqualink_iqpump01",
   "codeowners": ["@CLARENNE-Q"],
-  "documentation": "https://github.com/CLARENNE-Q/iaqualink_iqpump01",
+  "documentation": "https://quentin.clarenne.name/",
   "requirements": [],
-  "version": "1.0.7",
+  "version": "1.0.8",
   "config_flow": true,
   "render_readme": true
 }

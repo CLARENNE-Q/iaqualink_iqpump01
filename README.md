@@ -1,5 +1,5 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/CLARENNE-Q/iaqualink_iqpump01)
-![version](https://img.shields.io/badge/version-1.0.7-blue)
+![version](https://img.shields.io/badge/version-1.0.8-blue)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-%23FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/clarenneq)
 
 # iAquaLink iQPump01
@@ -79,7 +79,7 @@ cat /config/home-assistant.log | grep iaqualink_iqpump01
 
 This will filter the relevant debug messages from the integration.
 
-> ⚠️ **Important**: Before pasting logs in an issue, always review them and **remove your email, password, authentication tokens, and serial numbers**. These are private and should never be shared publicly.
+> ⚠️ **Important**: Debug logs are automatically redacted by the integration, but always review them before pasting them in an issue. Remove any remaining email, password, authentication token, serial number, Wi-Fi SSID, address, or phone number.
 
 
 ## 🚀 Planned Features

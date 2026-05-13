@@ -1,10 +1,10 @@
 {
   "domain": "iaqualink_iqpump01",
   "name": "iAquaLink iQPump01",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "config_flow": true,
   "requirements": ["requests"],
-  "documentation": "https://example.com",
-  "codeowners": ["@quentin"],
+  "documentation": "https://quentin.clarenne.name/",
+  "codeowners": ["@CLARENNE-Q"],
   "iot_class": "cloud_polling"
 }

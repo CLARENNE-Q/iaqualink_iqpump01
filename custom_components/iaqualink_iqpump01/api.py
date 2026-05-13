@@ -1,6 +1,7 @@
 import time
 import threading
 import logging
+import json
 import requests
 
 _LOGGER = logging.getLogger(__name__)
@@ -8,6 +9,39 @@ REQUEST_TIMEOUT = 15
 DEFAULT_REFRESH_INTERVAL = 60
 FAST_REFRESH_INTERVAL = 10
 FAST_REFRESH_DURATION = 3 * 60
+REDACTED = "<redacted>"
+SENSITIVE_LOG_KEYS = {
+    "accesskeyid",
+    "address",
+    "address_1",
+    "address_2",
+    "authentication_token",
+    "authorization",
+    "city",
+    "cookie",
+    "email",
+    "first_name",
+    "id",
+    "identityid",
+    "idtoken",
+    "last_name",
+    "password",
+    "phone",
+    "postal_code",
+    "refreshtoken",
+    "secretkey",
+    "session_id",
+    "sessiontoken",
+    "ssid",
+    "state",
+    "username",
+}
+SENSITIVE_LOG_KEY_PARTS = (
+    "credential",
+    "secret",
+    "session",
+    "token",
+)
 
 class IAqualinkClient:
     def __init__(self, email, password):
@@ -27,6 +61,69 @@ class IAqualinkClient:
     @staticmethod
     def _safe_url(url):
         return url.split("?", 1)[0]
+
+    @staticmethod
+    def _mask_email(value):
+        if not isinstance(value, str) or "@" not in value:
+            return REDACTED
+        local, domain = value.split("@", 1)
+        if len(local) <= 2:
+            masked_local = local[:1] + "***"
+        else:
+            masked_local = local[:2] + "***" + local[-1:]
+        return f"{masked_local}@{domain}"
+
+    @staticmethod
+    def _mask_suffix(value, visible=4):
+        text = str(value)
+        if len(text) <= visible:
+            return REDACTED
+        return f"***{text[-visible:]}"
+
+    @classmethod
+    def _redact_value(cls, key, value):
+        normalized_key = str(key).lower()
+        if normalized_key == "wifistatus" and isinstance(value, dict):
+            return {
+                "state": value.get("state"),
+                "ssid": REDACTED,
+            }
+        if normalized_key == "email":
+            return cls._mask_email(value)
+        if normalized_key in {"serial_number", "serialnumber"}:
+            return cls._mask_suffix(value)
+        if normalized_key in SENSITIVE_LOG_KEYS or any(
+            part in normalized_key for part in SENSITIVE_LOG_KEY_PARTS
+        ):
+            return REDACTED
+        return cls._redact_for_log(value)
+
+    @classmethod
+    def _redact_for_log(cls, value):
+        if isinstance(value, dict):
+            return {key: cls._redact_value(key, item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [cls._redact_for_log(item) for item in value]
+        return value
+
+    def _log_response(self, label, response):
+        try:
+            body = self._redact_for_log(response.json())
+        except ValueError:
+            _LOGGER.debug(
+                "[%s] Response status=%s body=<non-json, %s bytes>",
+                label,
+                response.status_code,
+                len(response.text or ""),
+            )
+            return
+
+        _LOGGER.debug(
+            "[%s] Response status=%s body=%s",
+            label,
+            response.status_code,
+            json.dumps(body, sort_keys=True),
+        )
 
     def _request(self, method, url, *, check_status=True, **kwargs):
         try:
@@ -77,7 +174,9 @@ class IAqualinkClient:
         return DEFAULT_REFRESH_INTERVAL
 
     def login(self):
-        _LOGGER.debug("[login] Logging in with email: %s", self.email)
+        _LOGGER.debug(
+            "[login] Logging in with email: %s", self._mask_email(self.email)
+        )
         login_url = "https://prod.zodiac-io.com/users/v1/login"
         payload = {
             "email": self.email,
@@ -89,7 +188,7 @@ class IAqualinkClient:
             "post", login_url, json=payload, headers=headers
         )
 
-        _LOGGER.debug("[login] Response: %s", response.text)
+        self._log_response("login", response)
 
         data = response.json()
         self.auth_token = data["authentication_token"]
@@ -100,7 +199,7 @@ class IAqualinkClient:
         device_url = f"https://r-api.iaqualink.net/devices.json?authentication_token={self.auth_token}&user_id={self.user_id}&api_key={self.apikey}"
         device_list = self._request("get", device_url)
 
-        _LOGGER.debug("[device_url] Response: %s", device_list.text)
+        self._log_response("device_url", device_list)
 
         for d in device_list.json():
             if d.get("device_type") == "i2d":
@@ -157,7 +256,7 @@ class IAqualinkClient:
                     json=payload,
                 )
 
-            _LOGGER.debug("[refresh_data] Response: %s", resp.text)
+            self._log_response("refresh_data", resp)
             resp.raise_for_status()
 
             self.data = resp.json().get("alldata", {})
@@ -199,7 +298,7 @@ class IAqualinkClient:
             )
 
         _LOGGER.debug("[_send_command] Response status: %s", resp.status_code)
-        _LOGGER.debug("[_send_command] Response body: %s", resp.text)
+        self._log_response("_send_command", resp)
         resp.raise_for_status()
 
         data = resp.json()
