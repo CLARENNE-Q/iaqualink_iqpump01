@@ -1,4 +1,3 @@
-import time
 import threading
 import logging
 import json
@@ -6,9 +5,6 @@ import requests
 
 _LOGGER = logging.getLogger(__name__)
 REQUEST_TIMEOUT = 15
-DEFAULT_REFRESH_INTERVAL = 60
-FAST_REFRESH_INTERVAL = 10
-FAST_REFRESH_DURATION = 3 * 60
 REDACTED = "<redacted>"
 SENSITIVE_LOG_KEYS = {
     "accesskeyid",
@@ -54,8 +50,6 @@ class IAqualinkClient:
         self.id_token = None
         self.serial = None
         self.data = {}
-        self.last_refresh = 0
-        self.fast_refresh_until = 0
         self._refresh_lock = threading.Lock()
 
     @staticmethod
@@ -159,20 +153,6 @@ class IAqualinkClient:
             )
             raise
 
-    def enable_fast_refresh(self, duration=FAST_REFRESH_DURATION):
-        self.fast_refresh_until = max(self.fast_refresh_until, time.time() + duration)
-        self.last_refresh = 0
-        _LOGGER.debug(
-            "[enable_fast_refresh] Using %ss cache for %ss after speed change.",
-            FAST_REFRESH_INTERVAL,
-            duration,
-        )
-
-    def _refresh_interval(self, now):
-        if now < self.fast_refresh_until:
-            return FAST_REFRESH_INTERVAL
-        return DEFAULT_REFRESH_INTERVAL
-
     def login(self):
         _LOGGER.debug(
             "[login] Logging in with email: %s", self._mask_email(self.email)
@@ -211,19 +191,7 @@ class IAqualinkClient:
 
     def refresh_data(self):
         with self._refresh_lock:
-            now = time.time()
-            refresh_interval = self._refresh_interval(now)
-            if self.last_refresh and now - self.last_refresh < refresh_interval:
-                _LOGGER.debug(
-                    "[refresh_data] Using cached pump data. refresh_interval=%ss",
-                    refresh_interval,
-                )
-                return self.data
-
-            _LOGGER.debug(
-                "[refresh_data] Refreshing pump data. refresh_interval=%ss",
-                refresh_interval,
-            )
+            _LOGGER.debug("[refresh_data] Refreshing pump data.")
             control_url = f"https://r-api.iaqualink.net/v2/devices/{self.serial}/control.json?"
             headers = {
                 "accept": "*/*",
@@ -260,7 +228,6 @@ class IAqualinkClient:
             resp.raise_for_status()
 
             self.data = resp.json().get("alldata", {})
-            self.last_refresh = now
             return self.data
 
     def _send_command(self, command, param):
