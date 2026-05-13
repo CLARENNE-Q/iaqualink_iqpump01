@@ -54,7 +54,7 @@ class PumpSpeedPercentNumber(NumberEntity):
             f"value={CUSTOM_SPEED_TIMER_SECONDS}",
         )
 
-        self._client.last_refresh = 0
+        self._client.enable_fast_refresh()
         await self.async_update()
     
         self._attr_value = value
