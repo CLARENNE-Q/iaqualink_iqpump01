@@ -1,5 +1,5 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/CLARENNE-Q/iaqualink_iqpump01)
-![version](https://img.shields.io/badge/version-1.0.9-blue)
+![version](https://img.shields.io/badge/version-1.0.10-blue)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-%23FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/clarenneq)
 
 # iAquaLink iQPump01
@@ -11,6 +11,7 @@ Control your Jandy iQPump01 variable-speed pool pump directly from Home Assistan
 - Turn the pump on/off
 - Set custom target using percentage-based control for 6 hours
 - Monitor current speed, power consumption, motor temperature, Wi-Fi status, etc.
+- Expose operating mode, target RPM, custom RPM, and custom speed timer sensors
 - Faster refresh for 3 minutes after speed changes to track real RPM ramp-up
 - View advanced attributes like firmware version, priming status, min/max RPM, serial number
 - Auto-refresh pump data every 60 seconds (with cache)
@@ -40,6 +41,10 @@ No further configuration is needed.
 | `number.pump_rpm_target_percentage` | Target RPM (%) — mapped to actual RPM using min/max range |
 | `sensor.pump_power` | Power consumption (W) |
 | `sensor.pump_speed` | Current speed (RPM) |
+| `sensor.pump_operating_mode` | Operating mode (`program`, `custom`, `off`) |
+| `sensor.pump_target_rpm` | Requested target RPM |
+| `sensor.pump_custom_speed_rpm` | Custom speed RPM |
+| `sensor.pump_custom_speed_timer` | Remaining custom speed timer (seconds) |
 | ... | Additional attributes on switch.pump_i2d such as temperature, runstate, firmware, priming, max/min-speed, serial, Wi-Fi, and more |
 
 

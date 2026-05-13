@@ -35,7 +35,12 @@ class PumpRunSwitch(IAqualinkPumpEntity, SwitchEntity):
         return {
             "serial_number": data.get("serialnumber"),
             "local_time": data.get("localtime"),
+            "opmode": data.get("opmode"),
+            "runstate": data.get("runstate"),
             "target_rpm": data.get("rpmtarget"),
+            "custom_speed_rpm": data.get("customspeedrpm"),
+            "custom_speed_timer": data.get("customspeedtimer"),
+            "motor_speed": data.get("motordata", {}).get("speed"),
             "temperature": data.get("motordata", {}).get("temperature"),
             "product_id": data.get("motordata", {}).get("productid"),
             "globalrpmmin": data.get("globalrpmmin"),
@@ -46,5 +51,4 @@ class PumpRunSwitch(IAqualinkPumpEntity, SwitchEntity):
             "primingrpm": data.get("primingrpm"),
             "primingperiod": data.get("primingperiod"),
             "primingtimer": data.get("primingtimer"),
-            "speed": data.get("motordata", {}).get("speed"),
         }

@@ -6,34 +6,98 @@ from .entity import IAqualinkPumpEntity
 _LOGGER = logging.getLogger(__name__)
 
 FIELDS = {
-    "speed": "Pump Speed",           # motordata.speed
-    "power": "Pump Power"            # motordata.power
+    "speed": {
+        "name": "Pump Speed",
+        "path": ("motordata", "speed"),
+        "unit": "rpm",
+        "state_class": "measurement",
+    },
+    "power": {
+        "name": "Pump Power",
+        "path": ("motordata", "power"),
+        "unit": "W",
+        "device_class": "power",
+        "state_class": "measurement",
+    },
+    "opmode": {
+        "name": "Pump Operating Mode",
+        "path": ("opmode",),
+    },
+    "rpmtarget": {
+        "name": "Pump Target RPM",
+        "path": ("rpmtarget",),
+        "unit": "rpm",
+    },
+    "customspeedrpm": {
+        "name": "Pump Custom Speed RPM",
+        "path": ("customspeedrpm",),
+        "unit": "rpm",
+    },
+    "customspeedtimer": {
+        "name": "Pump Custom Speed Timer",
+        "path": ("customspeedtimer",),
+        "unit": "s",
+    },
+}
+OPMODE_LABELS = {
+    "0": "program",
+    "1": "custom",
+    "2": "off",
 }
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     coordinator = hass.data[DOMAIN][config_entry.entry_id]
-    sensors = [PumpSensor(coordinator, key, name) for key, name in FIELDS.items()]
+    sensors = [PumpSensor(coordinator, key, description) for key, description in FIELDS.items()]
     async_add_entities(sensors)
 
 class PumpSensor(IAqualinkPumpEntity, SensorEntity):
-    def __init__(self, coordinator, field, name):
+    def __init__(self, coordinator, field, description):
         super().__init__(coordinator)
         self._field = field
-        self._attr_name = name
+        self._description = description
+        self._attr_name = description["name"]
         self._attr_unique_id = f"{coordinator.client.serial}_{field}"
 
-        if field == "power":
-            self._attr_native_unit_of_measurement = "W"
-            self._attr_device_class = "power"
-            self._attr_state_class = "measurement"
-        elif field == "speed":
-            self._attr_native_unit_of_measurement = "rpm"
-            self._attr_device_class = None
-            self._attr_state_class = "measurement"
+        self._attr_native_unit_of_measurement = description.get("unit")
+        self._attr_device_class = description.get("device_class")
+        self._attr_state_class = description.get("state_class")
 
     @property
     def native_value(self):
         data = self.coordinator.data or {}
-        if self._field in ["speed", "power"]:
-            return data.get("motordata", {}).get(self._field)
-        return None
+        value = self._value_from_path(data, self._description["path"])
+        if self._field == "opmode" and value is not None:
+            return OPMODE_LABELS.get(str(value), str(value))
+        return self._coerce_number(value)
+
+    @property
+    def extra_state_attributes(self):
+        if self._field != "opmode":
+            return None
+
+        data = self.coordinator.data or {}
+        return {
+            "opmode": data.get("opmode"),
+            "runstate": data.get("runstate"),
+            "rpmtarget": data.get("rpmtarget"),
+            "customspeedrpm": data.get("customspeedrpm"),
+            "customspeedtimer": data.get("customspeedtimer"),
+        }
+
+    @staticmethod
+    def _value_from_path(data, path):
+        value = data
+        for key in path:
+            if not isinstance(value, dict):
+                return None
+            value = value.get(key)
+        return value
+
+    @staticmethod
+    def _coerce_number(value):
+        if value in (None, ""):
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return value
