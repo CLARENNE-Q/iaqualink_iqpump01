@@ -20,14 +20,14 @@ class PumpRunSwitch(IAqualinkPumpEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs):
         try:
-            await self.hass.async_add_executor_job(self.client._send_command, "/opmode/write", "value=0")
+            await self.client._send_command("/opmode/write", "value=0")
         except IAqualinkError as err:
             raise HomeAssistantError(f"Unable to turn on pump: {err}") from err
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs):
         try:
-            await self.hass.async_add_executor_job(self.client._send_command, "/opmode/write", "value=2")
+            await self.client._send_command("/opmode/write", "value=2")
         except IAqualinkError as err:
             raise HomeAssistantError(f"Unable to turn off pump: {err}") from err
         await self.coordinator.async_request_refresh()

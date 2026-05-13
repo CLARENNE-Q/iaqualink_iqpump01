@@ -1,11 +1,14 @@
-import threading
-import logging
+import asyncio
 import json
-import requests
+import logging
+
+import aiohttp
 
 _LOGGER = logging.getLogger(__name__)
 REQUEST_TIMEOUT = 15
 REDACTED = "<redacted>"
+CONTROL_USER_AGENT = "iAqualink/934 CFNetwork/3826.500.111.2.2 Darwin/24.4.0"
+CONTROL_ACCEPT_LANGUAGE = "fr-CA,fr;q=0.9"
 SENSITIVE_LOG_KEYS = {
     "accesskeyid",
     "address",
@@ -32,12 +35,8 @@ SENSITIVE_LOG_KEYS = {
     "state",
     "username",
 }
-SENSITIVE_LOG_KEY_PARTS = (
-    "credential",
-    "secret",
-    "session",
-    "token",
-)
+SENSITIVE_LOG_KEY_PARTS = ("credential", "secret", "session", "token")
+
 
 class IAqualinkError(Exception):
     """Base iAquaLink API error."""
@@ -60,7 +59,8 @@ class IAqualinkCommandError(IAqualinkError):
 
 
 class IAqualinkClient:
-    def __init__(self, email, password, serial=None):
+    def __init__(self, session: aiohttp.ClientSession, email, password, serial=None):
+        self._session = session
         self.email = email
         self.password = password
         self.apikey = "EOOEMOW4YR6QNB07"
@@ -72,7 +72,7 @@ class IAqualinkClient:
         self.devices = []
         self.device = None
         self.data = {}
-        self._refresh_lock = threading.Lock()
+        self._refresh_lock = asyncio.Lock()
 
     @staticmethod
     def _safe_url(url):
@@ -100,10 +100,7 @@ class IAqualinkClient:
     def _redact_value(cls, key, value):
         normalized_key = str(key).lower()
         if normalized_key == "wifistatus" and isinstance(value, dict):
-            return {
-                "state": value.get("state"),
-                "ssid": REDACTED,
-            }
+            return {"state": value.get("state"), "ssid": REDACTED}
         if normalized_key == "email":
             return cls._mask_email(value)
         if normalized_key in {"serial_number", "serialnumber"}:
@@ -122,47 +119,38 @@ class IAqualinkClient:
             return [cls._redact_for_log(item) for item in value]
         return value
 
-    def _log_response(self, label, response):
+    async def _log_response(self, label, response):
         try:
-            body = self._redact_for_log(response.json())
-        except ValueError:
+            raw_body = await response.text()
+            payload = json.loads(raw_body)
+            body = self._redact_for_log(payload)
+        except (ValueError, aiohttp.ClientError):
             _LOGGER.debug(
-                "[%s] Response status=%s body=<non-json, %s bytes>",
+                "[%s] Response status=%s body=<non-json or unreadable>",
                 label,
-                response.status_code,
-                len(response.text or ""),
+                response.status,
             )
             return
 
         _LOGGER.debug(
             "[%s] Response status=%s body=%s",
             label,
-            response.status_code,
+            response.status,
             json.dumps(body, sort_keys=True),
         )
 
-    def _raise_for_status(self, response, context):
-        try:
-            response.raise_for_status()
-        except requests.HTTPError as err:
-            status = response.status_code
-            if status in (401, 403):
-                raise IAqualinkAuthError(
-                    f"iAquaLink authentication failed during {context}"
-                ) from err
-            raise IAqualinkConnectionError(
-                f"iAquaLink returned HTTP {status} during {context}"
-            ) from err
+    def _raise_for_status(self, status, context):
+        if 200 <= status < 300:
+            return
+        if status in (401, 403):
+            raise IAqualinkAuthError(f"iAquaLink authentication failed during {context}")
+        raise IAqualinkConnectionError(f"iAquaLink returned HTTP {status} during {context}")
 
-    def _request(self, method, url, *, check_status=True, **kwargs):
+    async def _request(self, method, url, *, check_status=True, context=None, **kwargs):
+        timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
         try:
-            response = requests.request(
-                method, url, timeout=REQUEST_TIMEOUT, **kwargs
-            )
-            if check_status:
-                self._raise_for_status(response, method.upper())
-            return response
-        except requests.Timeout:
+            response = await self._session.request(method, url, timeout=timeout, **kwargs)
+        except asyncio.TimeoutError:
             _LOGGER.warning(
                 "[_request] iAquaLink %s request timed out after %ss: %s",
                 method.upper(),
@@ -172,22 +160,7 @@ class IAqualinkClient:
             raise IAqualinkConnectionError(
                 f"iAquaLink {method.upper()} request timed out"
             ) from None
-        except requests.HTTPError as err:
-            status = err.response.status_code if err.response is not None else "unknown"
-            _LOGGER.warning(
-                "[_request] iAquaLink %s request returned HTTP %s: %s",
-                method.upper(),
-                status,
-                self._safe_url(url),
-            )
-            if status in (401, 403):
-                raise IAqualinkAuthError(
-                    f"iAquaLink {method.upper()} request returned HTTP {status}"
-                ) from err
-            raise IAqualinkConnectionError(
-                f"iAquaLink {method.upper()} request returned HTTP {status}"
-            ) from err
-        except requests.RequestException as err:
+        except aiohttp.ClientError as err:
             _LOGGER.warning(
                 "[_request] iAquaLink %s request failed for %s: %s",
                 method.upper(),
@@ -198,24 +171,69 @@ class IAqualinkClient:
                 f"iAquaLink {method.upper()} request failed"
             ) from err
 
-    def login(self):
-        _LOGGER.debug(
-            "[login] Logging in with email: %s", self._mask_email(self.email)
-        )
-        login_url = "https://prod.zodiac-io.com/users/v1/login"
-        payload = {
-            "email": self.email,
-            "password": self.password,
-            "apikey": self.apikey
+        if check_status:
+            self._raise_for_status(response.status, context or method.upper())
+        return response
+
+    async def _parse_json(self, response, context):
+        try:
+            return await response.json(content_type=None)
+        except (ValueError, aiohttp.ContentTypeError) as err:
+            raise IAqualinkConnectionError(
+                f"iAquaLink returned invalid JSON during {context}"
+            ) from err
+
+    def _control_url(self):
+        return f"https://r-api.iaqualink.net/v2/devices/{self.serial}/control.json?"
+
+    def _control_headers(self):
+        return {
+            "accept": "*/*",
+            "content-type": "application/json",
+            "cookie": f"session_id={self.session_id}; authentication_token={self.auth_token}",
+            "authorization": self.id_token,
+            "api_key": self.apikey,
+            "user-agent": CONTROL_USER_AGENT,
+            "accept-language": CONTROL_ACCEPT_LANGUAGE,
+            "accept-encoding": "gzip, deflate, br",
         }
+
+    async def _post_control(self, payload, context):
+        control_url = self._control_url()
+        headers = self._control_headers()
+        response = await self._request(
+            "post",
+            control_url,
+            check_status=False,
+            context=context,
+            headers=headers,
+            json=payload,
+        )
+        if response.status == 401:
+            _LOGGER.warning("[%s] Token expired, reauthenticating...", context)
+            await self.login()
+            headers = self._control_headers()
+            response = await self._request(
+                "post",
+                control_url,
+                check_status=False,
+                context=context,
+                headers=headers,
+                json=payload,
+            )
+        return response
+
+    async def login(self):
+        _LOGGER.debug("[login] Logging in with email: %s", self._mask_email(self.email))
+        login_url = "https://prod.zodiac-io.com/users/v1/login"
+        payload = {"email": self.email, "password": self.password, "apikey": self.apikey}
         headers = {"Content-Type": "application/json"}
-        response = self._request(
-            "post", login_url, json=payload, headers=headers
+        response = await self._request(
+            "post", login_url, context="login", json=payload, headers=headers
         )
 
-        self._log_response("login", response)
-
-        data = response.json()
+        await self._log_response("login", response)
+        data = await self._parse_json(response, "login")
         try:
             self.auth_token = data["authentication_token"]
             self.session_id = data["session_id"]
@@ -224,12 +242,14 @@ class IAqualinkClient:
         except KeyError as err:
             raise IAqualinkAuthError("iAquaLink login response is missing auth data") from err
 
-        device_url = f"https://r-api.iaqualink.net/devices.json?authentication_token={self.auth_token}&user_id={self.user_id}&api_key={self.apikey}"
-        device_list = self._request("get", device_url)
+        device_url = (
+            "https://r-api.iaqualink.net/devices.json"
+            f"?authentication_token={self.auth_token}&user_id={self.user_id}&api_key={self.apikey}"
+        )
+        device_list = await self._request("get", device_url, context="devices list")
 
-        self._log_response("device_url", device_list)
-
-        devices_payload = device_list.json()
+        await self._log_response("device_url", device_list)
+        devices_payload = await self._parse_json(device_list, "devices list")
         if isinstance(devices_payload, dict):
             devices_payload = devices_payload.get("devices", [])
 
@@ -267,86 +287,34 @@ class IAqualinkClient:
         self.device = self.devices[0]
         self.serial = self.device.get("serial_number")
 
-    def refresh_data(self):
-        with self._refresh_lock:
+    async def refresh_data(self):
+        async with self._refresh_lock:
             _LOGGER.debug("[refresh_data] Refreshing pump data.")
-            control_url = f"https://r-api.iaqualink.net/v2/devices/{self.serial}/control.json?"
-            headers = {
-                "accept": "*/*",
-                "content-type": "application/json",
-                "cookie": f"session_id={self.session_id}; authentication_token={self.auth_token}",
-                "authorization": self.id_token,
-                "api_key": self.apikey,
-                "user-agent": "iAqualink/934 CFNetwork/3826.500.111.2.2 Darwin/24.4.0",
-                "accept-language": "fr-CA,fr;q=0.9",
-                "accept-encoding": "gzip, deflate, br"
-            }
-            payload = {
-                "user_id": str(self.user_id),
-                "command": "/alldata/read"
-            }
+            payload = {"user_id": str(self.user_id), "command": "/alldata/read"}
 
-            resp = self._request(
-                "post", control_url, check_status=False, headers=headers, json=payload
-            )
-            if resp.status_code == 401:
-                _LOGGER.warning("[refresh_data] Token expired during refresh, reauthenticating...")
-                self.login()
-                headers["cookie"] = f"session_id={self.session_id}; authentication_token={self.auth_token}"
-                headers["authorization"] = self.id_token
-                resp = self._request(
-                    "post",
-                    control_url,
-                    check_status=False,
-                    headers=headers,
-                    json=payload,
-                )
+            resp = await self._post_control(payload, "refresh_data")
 
-            self._log_response("refresh_data", resp)
-            self._raise_for_status(resp, "refresh_data")
+            await self._log_response("refresh_data", resp)
+            self._raise_for_status(resp.status, "refresh_data")
 
-            self.data = resp.json().get("alldata", {})
+            response_data = await self._parse_json(resp, "refresh_data")
+            self.data = response_data.get("alldata", {})
             return self.data
 
-    def _send_command(self, command, param):
-        control_url = f"https://r-api.iaqualink.net/v2/devices/{self.serial}/control.json?"
-        headers = {
-            "accept": "*/*",
-            "content-type": "application/json",
-            "cookie": f"session_id={self.session_id}; authentication_token={self.auth_token}",
-            "authorization": self.id_token,
-            "api_key": self.apikey,
-            "user-agent": "iAqualink/934 CFNetwork/3826.500.111.2.2 Darwin/24.4.0",
-            "accept-language": "fr-CA,fr;q=0.9",
-            "accept-encoding": "gzip, deflate, br"
-        }
+    async def _send_command(self, command, param):
         payload = {
             "user_id": str(self.user_id),
             "command": command,
             "params": param,
         }
         _LOGGER.debug("[_send_command] POST %s | %s", command, param)
-        resp = self._request(
-            "post", control_url, check_status=False, headers=headers, json=payload
-        )
-        if resp.status_code == 401:
-            _LOGGER.warning("[_send_command] Token expired during command, reauthenticating...")
-            self.login()
-            headers["cookie"] = f"session_id={self.session_id}; authentication_token={self.auth_token}"
-            headers["authorization"] = self.id_token
-            resp = self._request(
-                "post",
-                control_url,
-                check_status=False,
-                headers=headers,
-                json=payload,
-            )
+        resp = await self._post_control(payload, "_send_command")
 
-        _LOGGER.debug("[_send_command] Response status: %s", resp.status_code)
-        self._log_response("_send_command", resp)
-        self._raise_for_status(resp, command)
+        _LOGGER.debug("[_send_command] Response status: %s", resp.status)
+        await self._log_response("_send_command", resp)
+        self._raise_for_status(resp.status, command)
 
-        data = resp.json()
+        data = await self._parse_json(resp, "_send_command")
         command_key = command.strip("/").split("/")[0]
         expected_value = param.removeprefix("value=") if param.startswith("value=") else None
         returned_value = data.get(command_key, {}).get("value")

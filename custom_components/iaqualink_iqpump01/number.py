@@ -80,14 +80,9 @@ class PumpSpeedPercentNumber(IAqualinkPumpEntity, NumberEntity):
         try:
             # The controller ignores custom RPM writes while running in scheduled mode
             # (opmode=0). Switch to manual/custom speed mode before writing the target.
-            await self.hass.async_add_executor_job(
-                self.client._send_command, "/opmode/write", "value=1"
-            )
-            await self.hass.async_add_executor_job(
-                self.client._send_command, "/customspeedrpm/write", f"value={rpm}"
-            )
-            await self.hass.async_add_executor_job(
-                self.client._send_command,
+            await self.client._send_command("/opmode/write", "value=1")
+            await self.client._send_command("/customspeedrpm/write", f"value={rpm}")
+            await self.client._send_command(
                 "/customspeedtimer/write",
                 f"value={timer_seconds}",
             )

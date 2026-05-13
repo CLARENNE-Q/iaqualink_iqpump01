@@ -7,7 +7,12 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import IAqualinkAuthError, IAqualinkClient
+from .api import (
+    IAqualinkAuthError,
+    IAqualinkClient,
+    IAqualinkCommandError,
+    IAqualinkConnectionError,
+)
 from .const import (
     CONF_FAST_REFRESH_DURATION_SECONDS,
     CONF_FAST_UPDATE_INTERVAL_SECONDS,
@@ -63,11 +68,15 @@ class IAqualinkPumpCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         try:
-            return await self.hass.async_add_executor_job(self.client.refresh_data)
+            return await self.client.refresh_data()
         except IAqualinkAuthError as err:
             raise ConfigEntryAuthFailed("iAquaLink authentication failed") from err
+        except IAqualinkConnectionError as err:
+            raise UpdateFailed(f"Network/HTTP error communicating with iAquaLink: {err}") from err
+        except IAqualinkCommandError as err:
+            raise UpdateFailed(f"Command validation failed: {err}") from err
         except Exception as err:
-            raise UpdateFailed(f"Error communicating with iAquaLink: {err}") from err
+            raise UpdateFailed(f"Unexpected error communicating with iAquaLink: {err}") from err
 
     @callback
     def enable_fast_refresh(self) -> None:

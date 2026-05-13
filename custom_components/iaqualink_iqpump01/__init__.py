@@ -1,3 +1,4 @@
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -21,13 +22,15 @@ async def async_options_update_listener(hass: HomeAssistant, entry: ConfigEntry)
     await hass.config_entries.async_reload(entry.entry_id)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+    session = async_get_clientsession(hass)
     client = IAqualinkClient(
+        session,
         entry.data["email"],
         entry.data["password"],
         entry.data.get(CONF_SERIAL),
     )
     try:
-        await hass.async_add_executor_job(client.login)
+        await client.login()
     except IAqualinkAuthError as err:
         raise ConfigEntryAuthFailed("iAquaLink authentication failed") from err
     except IAqualinkNoDeviceError as err:

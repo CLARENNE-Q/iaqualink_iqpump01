@@ -3,7 +3,6 @@
   "name": "iAquaLink iQPump01",
   "version": "1.0.15",
   "config_flow": true,
-  "requirements": ["requests"],
   "documentation": "https://quentin.clarenne.name/",
   "codeowners": ["@CLARENNE-Q"],
   "iot_class": "cloud_polling"

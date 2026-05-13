@@ -1,3 +1,4 @@
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import logging
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import AbortFlow
@@ -174,9 +175,9 @@ class AqualinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             data = dict(user_input)
             data["email"] = data["email"].strip().lower()
-            client = IAqualinkClient(data["email"], data["password"])
+            client = IAqualinkClient(async_get_clientsession(self.hass), data["email"], data["password"])
             try:
-                await self.hass.async_add_executor_job(client.login)
+                await client.login()
                 self._devices = client.devices
                 if len(self._devices) == 1:
                     return await self._async_create_pump_entry(

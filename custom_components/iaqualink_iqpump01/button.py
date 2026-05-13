@@ -26,11 +26,7 @@ class PumpReturnToProgramButton(IAqualinkPumpEntity, ButtonEntity):
     async def async_press(self):
         _LOGGER.debug("[PumpReturnToProgramButton] Returning pump to program mode.")
         try:
-            await self.hass.async_add_executor_job(
-                self.client._send_command,
-                "/opmode/write",
-                "value=0",
-            )
+            await self.client._send_command("/opmode/write", "value=0")
         except IAqualinkError as err:
             raise HomeAssistantError(
                 f"Unable to return pump to program mode: {err}"
