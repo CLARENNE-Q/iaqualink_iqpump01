@@ -39,6 +39,11 @@ class PumpSpeedPercentNumber(NumberEntity):
 
         _LOGGER.debug("[PumpSpeedPercentNumber] async_set_value %s%% -> %s RPM", value, rpm)
 
+        # The controller ignores custom RPM writes while running in scheduled mode
+        # (opmode=0). Switch to manual/custom speed mode before writing the target.
+        await self.hass.async_add_executor_job(
+            self._client._send_command, "/opmode/write", "value=1"
+        )
         await self.hass.async_add_executor_job(
             self._client._send_command, "/customspeedrpm/write", f"value={rpm}"
         )

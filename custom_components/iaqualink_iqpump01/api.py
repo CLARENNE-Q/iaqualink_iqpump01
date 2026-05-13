@@ -4,6 +4,7 @@ import logging
 import requests
 
 _LOGGER = logging.getLogger(__name__)
+REQUEST_TIMEOUT = 15
 
 class IAqualinkClient:
     def __init__(self, email, password):
@@ -28,7 +29,9 @@ class IAqualinkClient:
             "apikey": self.apikey
         }
         headers = {"Content-Type": "application/json"}
-        response = requests.post(login_url, json=payload, headers=headers)
+        response = requests.post(
+            login_url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT
+        )
 
         _LOGGER.debug("[login] Response: %s", response.text)
 
@@ -42,7 +45,7 @@ class IAqualinkClient:
         self.id_token = data["userPoolOAuth"]["IdToken"]
 
         device_url = f"https://r-api.iaqualink.net/devices.json?authentication_token={self.auth_token}&user_id={self.user_id}&api_key={self.apikey}"
-        device_list = requests.get(device_url)
+        device_list = requests.get(device_url, timeout=REQUEST_TIMEOUT)
 
         _LOGGER.debug("[device_url] Response: %s", device_list.text)
 
@@ -78,15 +81,20 @@ class IAqualinkClient:
                 "command": "/alldata/read"
             }
 
-            resp = requests.post(control_url, headers=headers, json=payload)
+            resp = requests.post(
+                control_url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
+            )
             if resp.status_code == 401:
                 _LOGGER.warning("[refresh_data] Token expired during refresh, reauthenticating...")
                 self.login()
                 headers["cookie"] = f"session_id={self.session_id}; authentication_token={self.auth_token}"
                 headers["authorization"] = self.id_token
-                resp = requests.post(control_url, headers=headers, json=payload)
+                resp = requests.post(
+                    control_url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
+                )
 
             _LOGGER.debug("[refresh_data] Response: %s", resp.text)
+            resp.raise_for_status()
 
             self.data = resp.json().get("alldata", {})
             self.last_refresh = now
@@ -110,10 +118,36 @@ class IAqualinkClient:
             "params": param,
         }
         _LOGGER.debug("[_send_command] POST %s | %s", command, param)
-        resp = requests.post(control_url, headers=headers, json=payload)
+        resp = requests.post(
+            control_url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
+        )
         if resp.status_code == 401:
             _LOGGER.warning("[_send_command] Token expired during command, reauthenticating...")
             self.login()
             headers["cookie"] = f"session_id={self.session_id}; authentication_token={self.auth_token}"
             headers["authorization"] = self.id_token
-            resp = requests.post(control_url, headers=headers, json=payload)
+            resp = requests.post(
+                control_url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
+            )
+
+        _LOGGER.debug("[_send_command] Response status: %s", resp.status_code)
+        _LOGGER.debug("[_send_command] Response body: %s", resp.text)
+        resp.raise_for_status()
+
+        data = resp.json()
+        command_key = command.strip("/").split("/")[0]
+        expected_value = param.removeprefix("value=") if param.startswith("value=") else None
+        returned_value = data.get(command_key, {}).get("value")
+        if (
+            expected_value is not None
+            and returned_value is not None
+            and str(returned_value) != str(expected_value)
+        ):
+            _LOGGER.warning(
+                "[_send_command] iAquaLink returned %s=%s after requested %s=%s",
+                command_key,
+                returned_value,
+                command_key,
+                expected_value,
+            )
+        return data
