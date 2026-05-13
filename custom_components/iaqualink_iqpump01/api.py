@@ -39,6 +39,26 @@ SENSITIVE_LOG_KEY_PARTS = (
     "token",
 )
 
+class IAqualinkError(Exception):
+    """Base iAquaLink API error."""
+
+
+class IAqualinkAuthError(IAqualinkError):
+    """Authentication or authorization failed."""
+
+
+class IAqualinkConnectionError(IAqualinkError):
+    """Unable to communicate with iAquaLink."""
+
+
+class IAqualinkNoDeviceError(IAqualinkError):
+    """No supported pump was found in the account."""
+
+
+class IAqualinkCommandError(IAqualinkError):
+    """iAquaLink rejected or ignored a command."""
+
+
 class IAqualinkClient:
     def __init__(self, email, password):
         self.email = email
@@ -119,13 +139,26 @@ class IAqualinkClient:
             json.dumps(body, sort_keys=True),
         )
 
+    def _raise_for_status(self, response, context):
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as err:
+            status = response.status_code
+            if status in (401, 403):
+                raise IAqualinkAuthError(
+                    f"iAquaLink authentication failed during {context}"
+                ) from err
+            raise IAqualinkConnectionError(
+                f"iAquaLink returned HTTP {status} during {context}"
+            ) from err
+
     def _request(self, method, url, *, check_status=True, **kwargs):
         try:
             response = requests.request(
                 method, url, timeout=REQUEST_TIMEOUT, **kwargs
             )
             if check_status:
-                response.raise_for_status()
+                self._raise_for_status(response, method.upper())
             return response
         except requests.Timeout:
             _LOGGER.warning(
@@ -134,7 +167,9 @@ class IAqualinkClient:
                 REQUEST_TIMEOUT,
                 self._safe_url(url),
             )
-            raise
+            raise IAqualinkConnectionError(
+                f"iAquaLink {method.upper()} request timed out"
+            ) from None
         except requests.HTTPError as err:
             status = err.response.status_code if err.response is not None else "unknown"
             _LOGGER.warning(
@@ -143,7 +178,13 @@ class IAqualinkClient:
                 status,
                 self._safe_url(url),
             )
-            raise
+            if status in (401, 403):
+                raise IAqualinkAuthError(
+                    f"iAquaLink {method.upper()} request returned HTTP {status}"
+                ) from err
+            raise IAqualinkConnectionError(
+                f"iAquaLink {method.upper()} request returned HTTP {status}"
+            ) from err
         except requests.RequestException as err:
             _LOGGER.warning(
                 "[_request] iAquaLink %s request failed for %s: %s",
@@ -151,7 +192,9 @@ class IAqualinkClient:
                 self._safe_url(url),
                 err.__class__.__name__,
             )
-            raise
+            raise IAqualinkConnectionError(
+                f"iAquaLink {method.upper()} request failed"
+            ) from err
 
     def login(self):
         _LOGGER.debug(
@@ -171,10 +214,13 @@ class IAqualinkClient:
         self._log_response("login", response)
 
         data = response.json()
-        self.auth_token = data["authentication_token"]
-        self.session_id = data["session_id"]
-        self.user_id = data["id"]
-        self.id_token = data["userPoolOAuth"]["IdToken"]
+        try:
+            self.auth_token = data["authentication_token"]
+            self.session_id = data["session_id"]
+            self.user_id = data["id"]
+            self.id_token = data["userPoolOAuth"]["IdToken"]
+        except KeyError as err:
+            raise IAqualinkAuthError("iAquaLink login response is missing auth data") from err
 
         device_url = f"https://r-api.iaqualink.net/devices.json?authentication_token={self.auth_token}&user_id={self.user_id}&api_key={self.apikey}"
         device_list = self._request("get", device_url)
@@ -187,7 +233,9 @@ class IAqualinkClient:
                 break
 
         if not self.serial:
-            _LOGGER.error("[login] No iQPump01 controller (device_type=i2d) found in your account. Make sure the pump is linked to your iAquaLink account.")
+            raise IAqualinkNoDeviceError(
+                "No iQPump01 controller (device_type=i2d) found in this iAquaLink account"
+            )
 
     def refresh_data(self):
         with self._refresh_lock:
@@ -225,7 +273,7 @@ class IAqualinkClient:
                 )
 
             self._log_response("refresh_data", resp)
-            resp.raise_for_status()
+            self._raise_for_status(resp, "refresh_data")
 
             self.data = resp.json().get("alldata", {})
             return self.data
@@ -266,7 +314,7 @@ class IAqualinkClient:
 
         _LOGGER.debug("[_send_command] Response status: %s", resp.status_code)
         self._log_response("_send_command", resp)
-        resp.raise_for_status()
+        self._raise_for_status(resp, command)
 
         data = resp.json()
         command_key = command.strip("/").split("/")[0]
@@ -277,11 +325,8 @@ class IAqualinkClient:
             and returned_value is not None
             and str(returned_value) != str(expected_value)
         ):
-            _LOGGER.warning(
-                "[_send_command] iAquaLink returned %s=%s after requested %s=%s",
-                command_key,
-                returned_value,
-                command_key,
-                expected_value,
+            raise IAqualinkCommandError(
+                f"iAquaLink returned {command_key}={returned_value} "
+                f"after requested {command_key}={expected_value}"
             )
         return data

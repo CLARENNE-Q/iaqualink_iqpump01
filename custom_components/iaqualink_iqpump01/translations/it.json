@@ -2,19 +2,21 @@
   "config": {
     "step": {
       "user": {
-        "title": "Accesso iAquaLink",
-        "description": "Inserisci la tua email e password iAquaLink.",
+        "title": "iAquaLink Login",
+        "description": "Enter your iAquaLink email and password.",
         "data": {
-          "email": "Indirizzo email",
+          "email": "Email Address",
           "password": "Password"
         }
       }
     },
     "error": {
-      "cannot_connect": "Impossibile connettersi. Controlla le tue credenziali."
+      "cannot_connect": "Unable to connect to iAquaLink. Please try again later.",
+      "invalid_auth": "Invalid iAquaLink email or password.",
+      "no_device": "No iQPump01 controller was found in this iAquaLink account."
     },
     "abort": {
-      "already_configured": "Questo dispositivo è già configurato."
+      "already_configured": "This device is already configured."
     }
   }
 }

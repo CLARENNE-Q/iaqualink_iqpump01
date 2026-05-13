@@ -2,10 +2,11 @@ import logging
 from datetime import timedelta
 
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import IAqualinkClient
+from .api import IAqualinkAuthError, IAqualinkClient
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,6 +32,8 @@ class IAqualinkPumpCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         try:
             return await self.hass.async_add_executor_job(self.client.refresh_data)
+        except IAqualinkAuthError as err:
+            raise ConfigEntryAuthFailed("iAquaLink authentication failed") from err
         except Exception as err:
             raise UpdateFailed(f"Error communicating with iAquaLink: {err}") from err
 

@@ -1,4 +1,3 @@
-
 {
   "config": {
     "step": {
@@ -12,10 +11,12 @@
       }
     },
     "error": {
-      "cannot_connect": "Impossible de se connecter. Vérifiez vos identifiants."
+      "cannot_connect": "Impossible de se connecter a iAquaLink. Reessayez plus tard.",
+      "invalid_auth": "Email ou mot de passe iAquaLink invalide.",
+      "no_device": "Aucun controleur iQPump01 trouve dans ce compte iAquaLink."
     },
     "abort": {
-      "already_configured": "Cet appareil est déjà configuré."
+      "already_configured": "Cet appareil est deja configure."
     }
   }
 }

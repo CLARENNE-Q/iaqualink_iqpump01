@@ -1,5 +1,7 @@
 import logging
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.exceptions import HomeAssistantError
+from .api import IAqualinkError
 from .const import DOMAIN
 from .entity import IAqualinkPumpEntity
 
@@ -17,11 +19,17 @@ class PumpRunSwitch(IAqualinkPumpEntity, SwitchEntity):
         self._attr_unique_id = f"{client.serial}_pump_i2d"
 
     async def async_turn_on(self, **kwargs):
-        await self.hass.async_add_executor_job(self.client._send_command, "/opmode/write", "value=0")
+        try:
+            await self.hass.async_add_executor_job(self.client._send_command, "/opmode/write", "value=0")
+        except IAqualinkError as err:
+            raise HomeAssistantError(f"Unable to turn on pump: {err}") from err
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs):
-        await self.hass.async_add_executor_job(self.client._send_command, "/opmode/write", "value=2")
+        try:
+            await self.hass.async_add_executor_job(self.client._send_command, "/opmode/write", "value=2")
+        except IAqualinkError as err:
+            raise HomeAssistantError(f"Unable to turn off pump: {err}") from err
         await self.coordinator.async_request_refresh()
 
     @property

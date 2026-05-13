@@ -1,5 +1,7 @@
 import logging
 from homeassistant.components.number import NumberEntity
+from homeassistant.exceptions import HomeAssistantError
+from .api import IAqualinkError
 from .const import DOMAIN
 from .entity import IAqualinkPumpEntity
 
@@ -58,19 +60,22 @@ class PumpSpeedPercentNumber(IAqualinkPumpEntity, NumberEntity):
 
         _LOGGER.debug("[PumpSpeedPercentNumber] async_set_value %s%% -> %s RPM", value, rpm)
 
-        # The controller ignores custom RPM writes while running in scheduled mode
-        # (opmode=0). Switch to manual/custom speed mode before writing the target.
-        await self.hass.async_add_executor_job(
-            self.client._send_command, "/opmode/write", "value=1"
-        )
-        await self.hass.async_add_executor_job(
-            self.client._send_command, "/customspeedrpm/write", f"value={rpm}"
-        )
-        await self.hass.async_add_executor_job(
-            self.client._send_command,
-            "/customspeedtimer/write",
-            f"value={CUSTOM_SPEED_TIMER_SECONDS}",
-        )
+        try:
+            # The controller ignores custom RPM writes while running in scheduled mode
+            # (opmode=0). Switch to manual/custom speed mode before writing the target.
+            await self.hass.async_add_executor_job(
+                self.client._send_command, "/opmode/write", "value=1"
+            )
+            await self.hass.async_add_executor_job(
+                self.client._send_command, "/customspeedrpm/write", f"value={rpm}"
+            )
+            await self.hass.async_add_executor_job(
+                self.client._send_command,
+                "/customspeedtimer/write",
+                f"value={CUSTOM_SPEED_TIMER_SECONDS}",
+            )
+        except IAqualinkError as err:
+            raise HomeAssistantError(f"Unable to set pump speed: {err}") from err
 
         self.coordinator.enable_fast_refresh()
         await self.coordinator.async_request_refresh()
