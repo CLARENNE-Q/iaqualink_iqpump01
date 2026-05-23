@@ -70,7 +70,7 @@ Observed useful commands:
 | Purpose | Command | Params |
 | --- | --- | --- |
 | Read all state | `/alldata/read` | none |
-| Return to scheduled/program mode | `/opmode/write` | `value=0` |
+| Return to auto mode | `/opmode/write` | `value=0` |
 | Enter custom/manual speed mode | `/opmode/write` | `value=1` |
 | Turn off | `/opmode/write` | `value=2` |
 | Set custom RPM | `/customspeedrpm/write` | `value=<rpm>` |
@@ -83,11 +83,12 @@ Important behavior:
   1. Write `/opmode/write` with `value=1`.
   2. Write `/customspeedrpm/write` with the desired RPM.
   3. Write `/customspeedtimer/write` with the desired duration.
-- Returning to the normal schedule is done by writing `/opmode/write` with
-  `value=0`.
+- Returning to the normal schedule/Auto mode is done by writing `/opmode/write`
+  with `value=0`.
 - Service mode (`opmode=7`) is not remotely controllable. Home Assistant should
   block write commands instead of trying to force pump control while the
-  iAquaLink app reports remote control is not authorized.
+  iAquaLink app reports remote control is not authorized. The operating mode
+  sensor displays this as `off` to match the iQPump01 interface.
 - If iAquaLink returns a different value than requested, Home Assistant should
   show a visible command error instead of silently accepting the state.
 
@@ -97,10 +98,18 @@ Observed `opmode` values:
 
 | `opmode` | Meaning |
 | --- | --- |
-| `0` | Scheduled/program mode |
+| `0` | Auto mode |
 | `1` | Custom/manual speed mode |
 | `2` | Off |
-| `7` | Service mode; remote control not authorized |
+| `3` | Quick Clean |
+| `4` | Timed Run |
+| `5` | Timed Stop |
+| `7` | Off/service mode; remote control not authorized |
+
+The Home Assistant operating mode sensor uses labels aligned with the iQPump01
+interface where observed: `auto`, `custom`, `off`, `quick clean`, `timed run`,
+and `timed stop`. Raw `opmode=7` is still treated internally as service mode for
+command blocking even though the displayed label is `off`.
 
 Related fields:
 

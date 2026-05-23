@@ -40,10 +40,13 @@ FIELDS = {
     },
 }
 OPMODE_LABELS = {
-    "0": "program",
+    "0": "auto",
     "1": "custom",
     "2": "off",
-    OPMODE_SERVICE: "service",
+    "3": "quick clean",
+    "4": "timed run",
+    "5": "timed stop",
+    OPMODE_SERVICE: "off",
 }
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
