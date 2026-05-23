@@ -4,7 +4,7 @@
   "codeowners": ["@CLARENNE-Q"],
   "documentation": "https://quentin.clarenne.name/",
   "requirements": [],
-  "version": "1.0.15",
+  "version": "1.0.17",
   "config_flow": true,
   "render_readme": true
 }

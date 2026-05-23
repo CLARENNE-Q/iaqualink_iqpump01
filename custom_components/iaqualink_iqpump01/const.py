@@ -1,4 +1,8 @@
 DOMAIN = "iaqualink_iqpump01"
+OPMODE_SERVICE = "7"
+SERVICE_MODE_REMOTE_CONTROL_ERROR = (
+    "Remote control not authorized: pump is in service mode."
+)
 
 CONF_SERIAL = "serial"
 CONF_CUSTOM_SPEED_TIMER_SECONDS = "custom_speed_timer_seconds"

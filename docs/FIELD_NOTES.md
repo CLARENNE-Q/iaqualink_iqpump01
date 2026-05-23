@@ -85,6 +85,9 @@ Important behavior:
   3. Write `/customspeedtimer/write` with the desired duration.
 - Returning to the normal schedule is done by writing `/opmode/write` with
   `value=0`.
+- Service mode (`opmode=7`) is not remotely controllable. Home Assistant should
+  block write commands instead of trying to force pump control while the
+  iAquaLink app reports remote control is not authorized.
 - If iAquaLink returns a different value than requested, Home Assistant should
   show a visible command error instead of silently accepting the state.
 
@@ -97,6 +100,7 @@ Observed `opmode` values:
 | `0` | Scheduled/program mode |
 | `1` | Custom/manual speed mode |
 | `2` | Off |
+| `7` | Service mode; remote control not authorized |
 
 Related fields:
 

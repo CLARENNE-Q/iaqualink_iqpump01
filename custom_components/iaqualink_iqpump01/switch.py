@@ -19,6 +19,7 @@ class PumpRunSwitch(IAqualinkPumpEntity, SwitchEntity):
         self._attr_unique_id = f"{client.serial}_pump_i2d"
 
     async def async_turn_on(self, **kwargs):
+        self._raise_if_service_mode("Turn on command")
         try:
             await self.hass.async_add_executor_job(self.client._send_command, "/opmode/write", "value=0")
         except IAqualinkError as err:
@@ -26,6 +27,7 @@ class PumpRunSwitch(IAqualinkPumpEntity, SwitchEntity):
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs):
+        self._raise_if_service_mode("Turn off command")
         try:
             await self.hass.async_add_executor_job(self.client._send_command, "/opmode/write", "value=2")
         except IAqualinkError as err:

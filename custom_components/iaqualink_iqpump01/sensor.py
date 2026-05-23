@@ -1,6 +1,6 @@
 import logging
 from homeassistant.components.sensor import SensorEntity
-from .const import DOMAIN
+from .const import DOMAIN, OPMODE_SERVICE
 from .entity import IAqualinkPumpEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,6 +43,7 @@ OPMODE_LABELS = {
     "0": "program",
     "1": "custom",
     "2": "off",
+    OPMODE_SERVICE: "service",
 }
 
 async def async_setup_entry(hass, config_entry, async_add_entities):

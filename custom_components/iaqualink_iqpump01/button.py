@@ -24,6 +24,7 @@ class PumpReturnToProgramButton(IAqualinkPumpEntity, ButtonEntity):
         self._attr_icon = "mdi:calendar-clock"
 
     async def async_press(self):
+        self._raise_if_service_mode("Return to program command")
         _LOGGER.debug("[PumpReturnToProgramButton] Returning pump to program mode.")
         try:
             await self.hass.async_add_executor_job(

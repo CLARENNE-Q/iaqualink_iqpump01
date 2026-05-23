@@ -1,6 +1,11 @@
+import logging
+
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, OPMODE_SERVICE, SERVICE_MODE_REMOTE_CONTROL_ERROR
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class IAqualinkPumpEntity(CoordinatorEntity):
@@ -33,3 +38,19 @@ class IAqualinkPumpEntity(CoordinatorEntity):
     @property
     def client(self):
         return self.coordinator.client
+
+    @property
+    def _is_service_mode(self):
+        data = self.coordinator.data or {}
+        return str(data.get("opmode")) == OPMODE_SERVICE
+
+    def _raise_if_service_mode(self, action):
+        if not self._is_service_mode:
+            return
+
+        _LOGGER.warning(
+            "%s ignored: pump in service mode (opmode=%s)",
+            action,
+            OPMODE_SERVICE,
+        )
+        raise HomeAssistantError(SERVICE_MODE_REMOTE_CONTROL_ERROR)

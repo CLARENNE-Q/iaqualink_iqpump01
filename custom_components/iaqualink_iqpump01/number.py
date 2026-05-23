@@ -66,6 +66,7 @@ class PumpSpeedPercentNumber(IAqualinkPumpEntity, NumberEntity):
         )
 
     async def async_set_value(self, value):
+        self._raise_if_service_mode("Set speed command")
         rpm = self._percent_to_rpm(value)
         rpm = int(round(rpm / 25) * 25)
         timer_seconds = self._custom_speed_timer_seconds()
