@@ -22,7 +22,7 @@ class PumpSpeedPercentNumber(IAqualinkPumpEntity, NumberEntity):
         client = coordinator.client
         self._attr_name = "Pump RPM Target Percentage"
         self._attr_unique_id = f"{client.serial}_rpm_percentage"
-        self._attr_step = 1
+        self._attr_native_step = 1
         self._attr_native_min_value = 0
         self._attr_native_max_value = 100
         self._attr_native_unit_of_measurement = "%"
@@ -65,7 +65,7 @@ class PumpSpeedPercentNumber(IAqualinkPumpEntity, NumberEntity):
             DEFAULT_CUSTOM_SPEED_TIMER_SECONDS,
         )
 
-    async def async_set_value(self, value):
+    async def async_set_native_value(self, value: float) -> None:
         self._raise_if_service_mode("Set speed command")
         rpm = self._percent_to_rpm(value)
         rpm = int(round(rpm / 25) * 25)
