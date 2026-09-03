@@ -1,13 +1,6 @@
 import logging
 from homeassistant.components.number import NumberEntity
-from homeassistant.exceptions import HomeAssistantError
-from .api import IAqualinkError
-from .const import (
-    CONF_CUSTOM_SPEED_TIMER_SECONDS,
-    DEFAULT_CUSTOM_SPEED_TIMER_SECONDS,
-    DOMAIN,
-    option_int,
-)
+from .const import DOMAIN, rpm_limits
 from .entity import IAqualinkPumpEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,19 +20,8 @@ class PumpSpeedPercentNumber(IAqualinkPumpEntity, NumberEntity):
         self._attr_native_max_value = 100
         self._attr_native_unit_of_measurement = "%"
 
-    def _rpm_limits(self):
-        data = self.coordinator.data or {}
-        return (
-            int(data.get("globalrpmmin", 1000)),
-            int(data.get("globalrpmmax", 3450)),
-        )
-
-    def _percent_to_rpm(self, percent):
-        rpm_min, rpm_max = self._rpm_limits()
-        return int(rpm_min + (percent / 100) * (rpm_max - rpm_min))
-
     def _rpm_to_percent(self, rpm):
-        rpm_min, rpm_max = self._rpm_limits()
+        rpm_min, rpm_max = rpm_limits(self.coordinator.data)
         if rpm_max == rpm_min:
             return 0
         return int((rpm - rpm_min) / (rpm_max - rpm_min) * 100)
@@ -49,7 +31,7 @@ class PumpSpeedPercentNumber(IAqualinkPumpEntity, NumberEntity):
         data = self.coordinator.data or {}
         try:
             rpm_str = data.get("rpmtarget")
-            rpm_min, _ = self._rpm_limits()
+            rpm_min, _ = rpm_limits(data)
             rpm = int(rpm_str) if rpm_str else rpm_min
             percent = self._rpm_to_percent(rpm)
             _LOGGER.debug("[PumpSpeedPercentNumber] rpm=%s -> percent=%s", rpm, percent)
@@ -58,42 +40,6 @@ class PumpSpeedPercentNumber(IAqualinkPumpEntity, NumberEntity):
             _LOGGER.warning("[PumpSpeedPercentNumber] Failed to read state: %s", e)
             return None
 
-    def _custom_speed_timer_seconds(self):
-        return option_int(
-            self.coordinator.config_entry.options,
-            CONF_CUSTOM_SPEED_TIMER_SECONDS,
-            DEFAULT_CUSTOM_SPEED_TIMER_SECONDS,
-        )
-
     async def async_set_value(self, value):
-        self._raise_if_service_mode("Set speed command")
-        rpm = self._percent_to_rpm(value)
-        rpm = int(round(rpm / 25) * 25)
-        timer_seconds = self._custom_speed_timer_seconds()
-
-        _LOGGER.debug(
-            "[PumpSpeedPercentNumber] async_set_value %s%% -> %s RPM for %ss",
-            value,
-            rpm,
-            timer_seconds,
-        )
-
-        try:
-            # The controller ignores custom RPM writes while running in scheduled mode
-            # (opmode=0). Switch to manual/custom speed mode before writing the target.
-            await self.hass.async_add_executor_job(
-                self.client._send_command, "/opmode/write", "value=1"
-            )
-            await self.hass.async_add_executor_job(
-                self.client._send_command, "/customspeedrpm/write", f"value={rpm}"
-            )
-            await self.hass.async_add_executor_job(
-                self.client._send_command,
-                "/customspeedtimer/write",
-                f"value={timer_seconds}",
-            )
-        except IAqualinkError as err:
-            raise HomeAssistantError(f"Unable to set pump speed: {err}") from err
-
-        self.coordinator.enable_fast_refresh()
-        await self.coordinator.async_request_refresh()
+        timer_seconds = self.coordinator.custom_speed_timer_seconds()
+        await self.coordinator.async_set_custom_speed(value, timer_seconds)

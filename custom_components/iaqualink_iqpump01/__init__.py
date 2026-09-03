@@ -1,8 +1,12 @@
+import asyncio
 import logging
+import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from .const import CONF_SERIAL, DOMAIN
+from homeassistant.const import ATTR_DEVICE_ID
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady, HomeAssistantError
+from homeassistant.helpers import config_validation as cv
+from .const import CONF_SERIAL, DOMAIN, SERVICE_SET_CUSTOM_SPEED
 from .api import (
     IAqualinkAuthError,
     IAqualinkClient,
@@ -14,7 +18,39 @@ from .coordinator import IAqualinkPumpCoordinator
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["switch", "number", "sensor", "button", "binary_sensor"]
 
+SET_CUSTOM_SPEED_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
+        vol.Required("rpm"): vol.All(vol.Coerce(int), vol.Range(min=0)),
+        vol.Required("duration"): vol.All(cv.time_period, cv.positive_timedelta),
+    }
+)
+
 async def async_setup(hass: HomeAssistant, config: dict):
+    async def async_handle_set_custom_speed(call: ServiceCall):
+        duration_seconds = int(call.data["duration"].total_seconds())
+        coordinators = []
+        for device_id in call.data[ATTR_DEVICE_ID]:
+            coordinator = IAqualinkPumpCoordinator.async_get_by_device_id(hass, device_id)
+            if coordinator is None:
+                raise HomeAssistantError(
+                    f"Device {device_id} is not an iAquaLink iQPump01 pump"
+                )
+            coordinators.append(coordinator)
+
+        await asyncio.gather(
+            *(
+                coordinator.async_set_custom_speed_rpm(call.data["rpm"], duration_seconds)
+                for coordinator in coordinators
+            )
+        )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_CUSTOM_SPEED,
+        async_handle_set_custom_speed,
+        schema=SET_CUSTOM_SPEED_SCHEMA,
+    )
     return True
 
 async def async_options_update_listener(hass: HomeAssistant, entry: ConfigEntry):

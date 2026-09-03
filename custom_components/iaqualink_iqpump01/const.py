@@ -22,6 +22,12 @@ CUSTOM_SPEED_TIMER_OPTIONS = {
     12 * 60 * 60: "12 h",
     (23 * 60 + 59) * 60: "23 h 59",
 }
+MAX_CUSTOM_SPEED_TIMER_SECONDS = max(CUSTOM_SPEED_TIMER_OPTIONS)
+
+SERVICE_SET_CUSTOM_SPEED = "set_custom_speed"
+
+DEFAULT_RPM_MIN = 1000
+DEFAULT_RPM_MAX = 3450
 
 
 def option_int(options, key, default):
@@ -30,3 +36,12 @@ def option_int(options, key, default):
         return int(options.get(key, default))
     except (TypeError, ValueError):
         return default
+
+
+def rpm_limits(data):
+    """Return (rpm_min, rpm_max) from device data, with fallback defaults."""
+    data = data or {}
+    return (
+        int(data.get("globalrpmmin", DEFAULT_RPM_MIN)),
+        int(data.get("globalrpmmax", DEFAULT_RPM_MAX)),
+    )
