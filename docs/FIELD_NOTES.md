@@ -240,6 +240,42 @@ Main entities added during recent improvements:
 The exact entity IDs can vary depending on Home Assistant's entity registry and
 user customizations.
 
+## Services
+
+`iaqualink_iqpump01.set_custom_speed` is a domain-level service (registered in
+`__init__.py`'s `async_setup`, not tied to any single entity platform) that
+sets a custom RPM target for a specific duration in one call, matching the
+"set X rpm for X time" control in the iAquaLink app. The `number` entity's
+`async_set_value` only ever writes a percentage-mapped RPM using the
+options-flow preset duration; this service is the only way to set an
+arbitrary RPM and an arbitrary duration together.
+
+- Fields: `rpm` (raw RPM, matching what the iAquaLink app displays) and
+  `duration` (HA duration selector, day component disabled).
+- Target is the iQPump01 **device** (`device_id`, multiple allowed;
+  `services.yaml` restricts the picker to `integration: iaqualink_iqpump01`
+  devices). `IAqualinkPumpCoordinator.async_get_by_device_id(hass, device_id)`
+  resolves a device_id to its coordinator (device registry `config_entries`
+  intersected with `hass.data[DOMAIN]`) — this is a general-purpose resolver
+  on the coordinator class, not something private to this service, so any
+  future device-targeted service can reuse it. The handler in `__init__.py`
+  resolves every targeted device first (raising if any is unrecognized), then
+  runs `coordinator.async_set_custom_speed_rpm(rpm, duration_seconds)`
+  concurrently across all of them via `asyncio.gather` — each targeted pump
+  is an independent physical device with its own HTTP session, so there's no
+  reason to serialize across pumps (the three-write ordering constraint only
+  applies within a single pump's own sequence).
+- `rpm` is validated against the pump's live `globalrpmmin`/`globalrpmmax`;
+  out-of-range values raise a clear error rather than being silently clamped.
+- `duration` is validated against `MAX_CUSTOM_SPEED_TIMER_SECONDS` (23h59, the
+  same ceiling the app enforces) before any write happens.
+- The actual write sequence (and the service-mode guard) live in
+  `IAqualinkPumpCoordinator._async_write_custom_speed(rpm, duration_seconds)`,
+  which rounds to the nearest 25 RPM the controller accepts. Both
+  `async_set_custom_speed(percentage, ...)` (used by the number entity) and
+  `async_set_custom_speed_rpm(rpm, ...)` (used by the service) funnel into
+  it — extend that helper, don't duplicate the three-write sequence.
+
 ## Config Flow And Options Flow
 
 Config flow behavior:

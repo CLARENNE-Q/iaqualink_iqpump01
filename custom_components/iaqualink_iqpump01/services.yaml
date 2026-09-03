@@ -1,0 +1,36 @@
+set_custom_speed:
+  name: Set custom speed
+  description: >-
+    Set the pump to a custom speed for a specific duration in one call,
+    matching the "set X rpm for X time" control in the iAquaLink app. The
+    pump switches to custom/manual mode and reverts to the scheduled program
+    once the duration elapses.
+  target:
+    device:
+      - integration: iaqualink_iqpump01
+  fields:
+    rpm:
+      name: Speed
+      description: >-
+        Target speed in RPM, same as shown in the iAquaLink app. Must be
+        within this pump's configured range (globalrpmmin-globalrpmmax);
+        out-of-range values are rejected when the service is called.
+      required: true
+      example: 2200
+      selector:
+        number:
+          min: 0
+          max: 3450
+          step: 25
+          unit_of_measurement: "rpm"
+          mode: box
+    duration:
+      name: Duration
+      description: >-
+        How long the custom speed should run before the pump reverts to the
+        scheduled program. Up to 23h59, matching the iAquaLink app's limit.
+      required: true
+      example: "01:30:00"
+      selector:
+        duration:
+          enable_day: false

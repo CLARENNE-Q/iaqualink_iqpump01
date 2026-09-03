@@ -51,6 +51,12 @@ No further configuration is needed.
 | `sensor.pump_custom_speed_timer` | Remaining custom speed timer (seconds) |
 | ... | Additional attributes on switch.pump_i2d such as temperature, runstate, firmware, priming, max/min-speed, serial, Wi-Fi, and more |
 
+## 🧰 Services
+
+| Service | Description |
+|---------|-------------|
+| `iaqualink_iqpump01.set_custom_speed` | Set the pump to a custom `rpm` for a specific `duration` (up to 23h59). Target the iQPump01 device. |
+
 
 ## 📌 Current limitations
 
